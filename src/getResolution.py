@@ -54,9 +54,9 @@ def read_input_csv(csv_path="Internal_Att_review_for_Julien28062024.csv"):
             # labels = [label1]
 
             # concatenate labels
-            # node_label = "_".join(sorted(list({lab for lab in labels if len(lab) > 0})))
-            node_label = labels
-            # node_label = [lab for lab in labels if len(lab) > 0 ]
+            node_label = "_".join(sorted(list({lab for lab in labels if len(lab) > 0})))
+            #node_label = labels
+            #node_label = [lab for lab in labels if len(lab) > 0 ]
 
             doc2lab[int(doc_id)] = node_label
             doc2doi[int(doc_id)] = DOI
@@ -199,14 +199,14 @@ def compute_community(
             covered_nodes = [u for C in comm[:N_clus] for u in C]
 
         # compare community detection with manual annotation
-        # (part2label, y_pred, y_true, label_max, y_pred_covered, y_true_covered) = (
-        #    print_community_homogeneity(gx, comm, doc2lab, covered_nodes)
-        # )
+        (part2label, y_pred, y_true, label_max, y_pred_covered, y_true_covered) = (
+           print_community_homogeneity(gx, comm, doc2lab, covered_nodes)
+        )
 
-        # homogeneity = homogeneity_score(y_true, y_pred)
-        # completeness = completeness_score(y_true, y_pred)
-        ## contingency = contingency_matrix(y_true, y_pred)
-        # contingency_covered = contingency_matrix(y_true_covered, y_pred_covered)
+        homogeneity = homogeneity_score(y_true, y_pred)
+        completeness = completeness_score(y_true, y_pred)
+        contingency = contingency_matrix(y_true, y_pred)
+        contingency_covered = contingency_matrix(y_true_covered, y_pred_covered)
         # ari = adjusted_rand_score(y_true, y_pred)
         comm_label = majority_class_per_cluster(comm, doc2lab)
         #ipdb.set_trace()
