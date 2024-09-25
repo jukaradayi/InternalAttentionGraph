@@ -209,12 +209,12 @@ def compute_community(
         # contingency_covered = contingency_matrix(y_true_covered, y_pred_covered)
         # ari = adjusted_rand_score(y_true, y_pred)
         comm_label = majority_class_per_cluster(comm, doc2lab)
-        ipdb.set_trace()
+        #ipdb.set_trace()
         # write outputs to command line and to file
-        print(
-            f"resolution: {res:.1f}, homogeneity: {homogeneity},"
-            f"completeness: {completeness}, adjusted rand index:{ari}"
-        )
+        #print(
+        #    f"resolution: {res:.1f}, homogeneity: {homogeneity},"
+        #    f"completeness: {completeness}, adjusted rand index:{ari}"
+        #)
 
         if write_contingency:
             # header_true = np.unique(y_true, return_inverse=True)
@@ -255,8 +255,8 @@ def compute_community(
             annot,
             os.path.join(
                 output,
-                f"communities_res_{res:.1f}_hom_"
-                f"{homogeneity:.3f}_comp{completeness:.3f}"
+                f"communities_res_{res:.1f}" #_hom_"
+                #f"{homogeneity:.3f}_comp{completeness:.3f}"
                 f"_{N_clus}_{cov}.csv",
             ),
         )
@@ -285,7 +285,7 @@ def majority_class_per_cluster(comm, doc2lab):
 
         # assign this label to community, and for each doc in this community,
         # assign this label if this label was one of the three labels decided.
-        ipdb.set_trace()
+        #ipdb.set_trace()
         comm_label[comm_idx] = winner_label + (len(c),)
 
         # TODO do we do this ? What about other nodes.. ?
