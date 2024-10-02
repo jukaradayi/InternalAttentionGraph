@@ -55,9 +55,9 @@ def read_input_csv(
             # labels = [label1]
 
             # concatenate labels
-            # node_label = "_".join(sorted(list({lab for lab in labels if len(lab) > 0})))
-            node_label = labels
-            # node_label = [lab for lab in labels if len(lab) > 0 ]
+            node_label = "_".join(sorted(list({lab for lab in labels if len(lab) > 0})))
+            #node_label = labels
+            #node_label = [lab for lab in labels if len(lab) > 0 ]
 
             doc2lab[int(doc_id)] = node_label
             doc2doi[int(doc_id)] = DOI
