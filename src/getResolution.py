@@ -55,9 +55,9 @@ def read_input_csv(
             # labels = [label1]
 
             # concatenate labels
-            node_label = "_".join(sorted(list({lab for lab in labels if len(lab) > 0})))
-            #node_label = labels
-            #node_label = [lab for lab in labels if len(lab) > 0 ]
+            # node_label = "_".join(sorted(list({lab for lab in labels if len(lab) > 0})))
+            node_label = labels
+            # node_label = [lab for lab in labels if len(lab) > 0 ]
 
             doc2lab[int(doc_id)] = node_label
             doc2doi[int(doc_id)] = DOI
@@ -118,7 +118,7 @@ def create_graph(annot, doc2lab):
     gx = nx.Graph()
     gx.add_nodes_from(doc2lab)
 
-    # store number of fails using crossRef
+    # store number of fails using crossRef # TODO remove ?
     fails = []
     succ = []
 
@@ -252,7 +252,6 @@ def compute_community(
             ) as fout:
                 fout.write("x," + ",".join([str(v) for v in header_pred[0]]) + "\n")
                 for row_idx, row in enumerate(contingency_covered):
-                    ipdb.set_trace()
                     fout.write(
                         header_true[0][row_idx]
                         + ","
@@ -424,14 +423,15 @@ def majority_class_per_cluster(comm, doc2lab):
         purities.append(winner_label[1] / len(c))
 
         for doc in c:
-            labels = [
+            label_count = [
                 count_labels[doc2lab[doc][0]],
                 count_labels[doc2lab[doc][1]],
                 count_labels[doc2lab[doc][2]],
             ]
-            label_importance = [count_labels[lab] for lab in labels if lab != ""]
-            final_lab = labels[np.argmax(label_importance)]
-
+            # label_importance = [count_labels[lab] for lab in labels if lab != ""]
+            final_lab = doc2lab[doc][np.argmax(label_count)]
+            print(f"{doc2lab[doc]} ,\n{label_count}\n{final_lab}")
+            # ipdb.set_trace()
             doc2uniqLab[doc] = final_lab
 
         # print(comcom_labels)
@@ -560,8 +560,8 @@ def main():
         "-F",
         "--separator",
         type=str,
-        default="§",
-        help="field separator used in csv. Default to §",
+        default=",",
+        help="field separator used in csv. Default to ,",
     )
 
     parser.add_argument(
