@@ -19,7 +19,9 @@ from sklearn.metrics.cluster import (
 cr = Crossref()
 
 
-def read_input_csv(csv_path="Internal_Att_review_for_Julien28062024.csv"):
+def read_input_csv(
+    csv_path="InternalAttention_25092024_FieldsandDef.csv", separator=","
+):
     """Read input CSV.
     Expected Header is
     ID Abstract Authors Title Year DOI Journal Field_1 Field_2 Field_3
@@ -28,10 +30,10 @@ def read_input_csv(csv_path="Internal_Att_review_for_Julien28062024.csv"):
     Output is a list of tuples.
     """
 
-    annot = list()  # store document info as tuple
-    annot_dict = dict()
-    doc2lab = dict()  # doc_id: label
-    doc2doi = dict()
+    annot = []  # store document info as tuple
+    annot_dict = {}
+    doc2lab = {}  # doc_id: label
+    doc2doi = {}
     # all_labs = set()
 
     # parse CSV
@@ -41,16 +43,15 @@ def read_input_csv(csv_path="Internal_Att_review_for_Julien28062024.csv"):
             if line_idx == 0:
                 continue  # skip header
 
-            (doc_id, _, _, _, _, DOI, _, label1, label2, label3) = line.strip().split(
-                "§"
+            (doc_id, DOI, label1, label2, label3, definition) = line.strip().split(
+                separator
             )
 
             # concatenate labels
             if label2 == label1:
-                # remove duplicates - should be only 3 cases 
-                # cat Internal_Att_review_for_Julien28062024.csv | awk -F '§' '{if ($8 == $9) print NR,$8,$9,$10; if ($8==$10) print NR,$8,$9,$10}'
+                # remove duplicates - there should be only 3 cases
                 label2 = ""
-            labels = (label1, label2, label3)  # TODO list of tuples?
+            labels = (label1, label2, label3, definition)  # TODO list of tuples?
             # labels = [label1]
 
             # concatenate labels
@@ -68,7 +69,50 @@ def read_input_csv(csv_path="Internal_Att_review_for_Julien28062024.csv"):
     return annot, doc2lab, doc2doi, annot_dict
 
 
-def create_graph(annot, doc2lab, doc2doi):
+def create_direct_citation_graph(annot, doc2lab, doi2node):
+    """Create direct citation graph from list of DOI"""
+
+    # Create graph object and add nodes with their label
+    gx = nx.Graph()
+    gx.add_nodes_from(doc2lab)
+
+    # store number of fails using crossRef
+    fails = []
+    succ = []
+    failref = []
+    failbis = []
+
+    # Build direct citation graph
+    # for each doi, check if it's accessible through crossref,
+    # if it is check if references are accessible
+    doi_set = {doc_id for doc_id, _, _, _, _ in annot}
+    # for doi in doi_list:
+    for doc_id, DOI, _, _, _ in annot:
+
+        ## add edge when one DOI is citing another
+        try:
+            work = cr.works(ids=DOI)
+            references = work["message"]["reference"]
+            for ref in references:
+                if ("DOI" in ref) and ref["DOI"] in doi_set:
+                    print("adding edge to graph")
+                    # graph.addEdge(doi2node[doi], doi2node[ref['DOI']])
+                    gx.add_edge(doi2node[DOI], doi2node[ref["DOI"]])
+                else:
+                    ## referenced DOI is not in the input DOI list
+                    if "DOI" not in ref:
+                        failref.append((DOI, ref))
+                    elif ref["DOI"] not in doi_set:
+                        failbis.append((DOI, ref["DOI"]))
+            succ.append(DOI)
+
+        except HTTPError:
+            ## either doi is not on crossref,
+            # or there are no references in the dict.
+            fails.append(DOI)
+
+
+def create_graph(annot, doc2lab):
     """Create common citation graph from list of DOI"""
     # Create graph object and add nodes with their label
     gx = nx.Graph()
@@ -77,41 +121,11 @@ def create_graph(annot, doc2lab, doc2doi):
     # store number of fails using crossRef
     fails = []
     succ = []
-    # failref = []
-    # failbis = []
 
-    # Build direct citation graph
-    # for each doi, check if it's accessible through crossref,
-    # if it is check if references are accessible
-    # for doi in doi_list:
-    #    ## add edge when one DOI is citing another
-    #    try:
-    #        work = cr.works(ids = doi)
-    #        references = work['message']['reference']
-    #        for ref in references :
-    #            if ("DOI" in ref) and ref['DOI'] in doi_list:
-    #                print('adding edge to graph')
-    #                #graph.addEdge(doi2node[doi], doi2node[ref['DOI']])
-    #                gx.add_edge(doi2node[doi], doi2node[ref['DOI']])
-    #            else:
-    #                ## referenced DOI is not in the input DOI list
-    #                if 'DOI' not in ref:
-    #                    failref.append((doi,ref))
-    #                elif ref['DOI'] not in doi_list:
-    #                    failbis.append((doi,ref['DOI']))
-    #        succ.append(doi)
-    # doi accessible through crossref + crossref api gives reference : happy
-    #
-    #    except:
-    #        ## either doi is not on crossref,
-    #        # or there are no references in the dict.
-    #        fails.append(doi)
-
-    # Build common citation graph
     # Build graph by adding an edge
     # when two graph have at least one ref in common.
     # Edge of link is number of ref in common
-    doi2ref = dict()
+    doi2ref = {}
     for doc_id, DOI, _, _, _ in annot:
 
         try:
@@ -153,7 +167,6 @@ def compute_community(
     gx,
     resolutions,
     write_contingency,
-    verbose,
     output,
     doc2lab,
     annot,
@@ -196,25 +209,22 @@ def compute_community(
                 f"of articles with resolution {res:.1f}"
             )
             print([len(C) for C in comm[:N_clus]])
-            covered_nodes = [u for C in comm[:N_clus] for u in C]
 
-        # compare community detection with manual annotation
-        # (part2label, y_pred, y_true, label_max, y_pred_covered, y_true_covered) = (
-        #    print_community_homogeneity(gx, comm, doc2lab, covered_nodes)
-        # )
+        covered_nodes = [u for C in comm[:N_clus] for u in C]
 
-        # homogeneity = homogeneity_score(y_true, y_pred)
-        # completeness = completeness_score(y_true, y_pred)
-        ## contingency = contingency_matrix(y_true, y_pred)
-        # contingency_covered = contingency_matrix(y_true_covered, y_pred_covered)
-        # ari = adjusted_rand_score(y_true, y_pred)
-        comm_label = majority_class_per_cluster(comm, doc2lab)
-        ipdb.set_trace()
-        # write outputs to command line and to file
-        print(
-            f"resolution: {res:.1f}, homogeneity: {homogeneity},"
-            f"completeness: {completeness}, adjusted rand index:{ari}"
+        # covered_nodes = [u for C in comm[:N_clus] for u in C]
+        comm_label, doc2uniqLab = majority_class_per_cluster(comm, doc2lab)
+
+        # With 1 label per document, compute homogeneity and completeness
+        (part2label, y_pred, y_true, label_max, y_pred_covered, y_true_covered) = (
+            print_community_homogeneity(gx, comm, doc2uniqLab, covered_nodes)
         )
+
+        homogeneity = homogeneity_score(y_true, y_pred)
+        completeness = completeness_score(y_true, y_pred)
+        contingency = contingency_matrix(y_true, y_pred)
+        contingency_covered = contingency_matrix(y_true_covered, y_pred_covered)
+        # ari = adjusted_rand_score(y_true, y_pred)
 
         if write_contingency:
             # header_true = np.unique(y_true, return_inverse=True)
@@ -242,6 +252,7 @@ def compute_community(
             ) as fout:
                 fout.write("x," + ",".join([str(v) for v in header_pred[0]]) + "\n")
                 for row_idx, row in enumerate(contingency_covered):
+                    ipdb.set_trace()
                     fout.write(
                         header_true[0][row_idx]
                         + ","
@@ -251,33 +262,157 @@ def compute_community(
 
         # export community list
         write_communities(
-            comm[:N_clus],
+            comm,
             annot,
+            comm_label,
+            N_clus,
             os.path.join(
                 output,
-                f"communities_res_{res:.1f}_hom_"
-                f"{homogeneity:.3f}_comp{completeness:.3f}"
-                f"_{N_clus}_{cov}.csv",
+                f"communities_res_{res:.1f}_{N_clus}clusters_{cov:.3f}coverage.csv",
             ),
         )
 
     return comm
 
 
+def compute_metrics(gx):
+    """Compute some metrics over each community.
+    Metrics are : centrality, density, local clustering
+    """
+    pass
+
+
+# def compute_community(
+#    gx,
+#    resolutions,
+#    write_contingency,
+#    verbose,
+#    output,
+#    doc2lab,
+#    annot,
+#    cov_thresh,
+#    clus_thresh,
+# ):
+#    """Compute Greedy Modularity Communities"""
+#
+#    # Get size of graph, to compute coverage of clustering
+#    N = gx.number_of_nodes()
+#
+#    print("run Greedy Modularity community detection")
+#    for res in resolutions:
+#
+#        comm = nx.community.greedy_modularity_communities(gx, resolution=res)
+#
+#        if clus_thresh:
+#            N_clus = clus_thresh
+#            if clus_thresh >= len(comm):
+#                print(
+#                    f"Warning: cluster threshold {clus_thresh}"
+#                    "is higher than the actual"
+#                    "number of clusters for resolution {res:.1f}"
+#                )
+#
+#            cov = sum([len(C) for C in comm[:clus_thresh]]) / N
+#            print(
+#                f"{cov:.3f}% of articles covered"
+#                f"by {clus_thresh} with resolution {res:.1f}"
+#            )
+#
+#        if cov_thresh:
+#            N_clus = 0
+#            cov = sum([len(C) for C in comm[:N_clus]]) / N
+#            while cov < cov_thresh or N_clus >= len(comm):
+#                N_clus += 1
+#                cov = sum([len(C) for C in comm[:N_clus]]) / N
+#            print(
+#                f"{N_clus} clusters needed to cover {cov:.3f}%"
+#                f"of articles with resolution {res:.1f}"
+#            )
+#            print([len(C) for C in comm[:N_clus]])
+#            covered_nodes = [u for C in comm[:N_clus] for u in C]
+#
+#        # compare community detection with manual annotation
+#        # (part2label, y_pred, y_true, label_max, y_pred_covered, y_true_covered) = (
+#        #    print_community_homogeneity(gx, comm, doc2lab, covered_nodes)
+#        # )
+#
+#        # homogeneity = homogeneity_score(y_true, y_pred)
+#        # completeness = completeness_score(y_true, y_pred)
+#        ## contingency = contingency_matrix(y_true, y_pred)
+#        # contingency_covered = contingency_matrix(y_true_covered, y_pred_covered)
+#        # ari = adjusted_rand_score(y_true, y_pred)
+#        comm_label = majority_class_per_cluster(comm, doc2lab)
+#        #ipdb.set_trace()
+#        ## write outputs to command line and to file
+#        #print(
+#        #    f"resolution: {res:.1f}, homogeneity: {homogeneity},"
+#        #    f"completeness: {completeness}, adjusted rand index:{ari}"
+#        #)
+#
+#        #if write_contingency:
+#        #    # header_true = np.unique(y_true, return_inverse=True)
+#        #    # header_pred = np.unique(y_pred, return_inverse=True)
+#        #    # with open(os.path.join(output,
+#        #    #           f'contingency_res_{res:.1f}_hom_{homogeneity:.3f}'
+#        #    #           f'_comp{completeness:.3f}.csv'), 'w') as fout:
+#        #    #    fout.write('x,' +
+#        #    #               ','.join([str(v) for v in header_pred[0]]) + '\n')
+#        #    #    for row_idx, row in enumerate(contingency):
+#        #    #        fout.write(header_true[0][row_idx] + ','
+#        #    #                   + ','.join([str(v) for v in row]) + '\n')
+#
+#        #    header_true = np.unique(y_true_covered, return_inverse=True)
+#        #    header_pred = np.unique(y_pred_covered, return_inverse=True)
+#        #    with open(
+#        #        os.path.join(
+#        #            output,
+#        #            f"contingency_covered_res_{res:.1f}_"
+#        #            f"hom_{homogeneity:.3f}_comp{completeness:.3f}"
+#        #            f"_{N_clus}_{cov}.csv",
+#        #        ),
+#        #        "w",
+#        #        encoding="utf-8",
+#        #    ) as fout:
+#        #        fout.write("x," + ",".join([str(v) for v in header_pred[0]]) + "\n")
+#        #        for row_idx, row in enumerate(contingency_covered):
+#        #            fout.write(
+#        #                header_true[0][row_idx]
+#        #                + ","
+#        #                + ",".join([str(v) for v in row])
+#        #                + "\n"
+#        #            )
+#
+#        # export community list
+#        write_communities(
+#            comm[:N_clus],
+#            annot,
+#            os.path.join(
+#                output,
+#                f"communities_res_{res:.1f}_hom_"
+#                #f"{homogeneity:.3f}_comp{completeness:.3f}"
+#                f"_{N_clus}_{cov}.csv",
+#            ),
+#        )
+#
+#    return comm
+
+
 def majority_class_per_cluster(comm, doc2lab):
     """For each cluster get the label that is the most reprensented,
-    and compute a simili-purity measure for the cluster
+    and compute a simili-purity measure for the cluster.
+    For each document in the cluster, if it has multiple labels, assign only
+    the most common one in the cluster.
     """
 
     comm_label = {}
+    doc2uniqLab = {}
+    purities = []
 
     # loop through communities, for each community "flatten" the labels
     # and count the one occuring the most
     for comm_idx, c in enumerate(comm):
         comm_labels = [label for doc in c for label in doc2lab[doc] if label != ""]
-        
-        # flatten list of labels
-        #comm_labels = list(sum(comm_labels, ()))
+        # comcom_labels = [doc2lab[doc] for doc in c]
 
         # count occurences each element
         count_labels = Counter(comm_labels)
@@ -285,14 +420,29 @@ def majority_class_per_cluster(comm, doc2lab):
 
         # assign this label to community, and for each doc in this community,
         # assign this label if this label was one of the three labels decided.
-        ipdb.set_trace()
         comm_label[comm_idx] = winner_label + (len(c),)
+        purities.append(winner_label[1] / len(c))
 
+        for doc in c:
+            labels = [
+                count_labels[doc2lab[doc][0]],
+                count_labels[doc2lab[doc][1]],
+                count_labels[doc2lab[doc][2]],
+            ]
+            label_importance = [count_labels[lab] for lab in labels if lab != ""]
+            final_lab = labels[np.argmax(label_importance)]
+
+            doc2uniqLab[doc] = final_lab
+
+        # print(comcom_labels)
+        print(
+            f"cluster {comm_idx} has purity {winner_label[1]/len(c):.3f}, with size {len(c)}"
+        )
         # TODO do we do this ? What about other nodes.. ?
         # for node in c:
         #    if winner_label in doc2lab[node]:
         #        doc2lab[node] = winner_label
-    return comm_label
+    return comm_label, doc2uniqLab
 
 
 # def compute_girvanNewman(gx, k, write_contingency, verbose, output, doc2lab, annot):
@@ -368,21 +518,28 @@ def print_community_homogeneity(gx, comm, doc2lab, covered_nodes):
     return part2label, y_pred, y_true, communities, y_pred_covered, y_true_covered
 
 
-def write_communities(comm, annot, name):
+def write_communities(comm, annot, comm_label, N_clus, name):
     """Write communities in csv file.
     Header is:
         file_ID, DOI, community, label
     """
+    is_covered = True
     with open(name, "w", encoding="utf-8") as fout:
-        fout.write("ID,DOI,community,Label\n")
+        fout.write("ID,DOI,community,Label,community_Label,is_covered\n")
         for comm_id, community in enumerate(comm):
+
+            if comm_id >= N_clus:
+                is_covered = False
+
             for doc_id in community:
                 DOI, lab1, lab2, lab3 = annot[doc_id]
                 node_label = "_".join(
                     sorted(list({lab for lab in [lab1, lab2, lab3] if len(lab) > 0}))
                 )  # concatenate labels
-
-                fout.write(f"{doc_id},{DOI},comm_{comm_id},{node_label}\n")
+                fout.write(
+                    f"{doc_id},{DOI},comm_{comm_id},{node_label},"
+                    f"{comm_label[comm_id][0]},{is_covered}\n"
+                )
 
 
 def main():
@@ -397,6 +554,14 @@ def main():
         type=str,
         default="Internal_Att_review_for_Julien28062024.csv",
         help="path to the input CSV",
+    )
+
+    parser.add_argument(
+        "-F",
+        "--separator",
+        type=str,
+        default="§",
+        help="field separator used in csv. Default to §",
     )
 
     parser.add_argument(
@@ -471,8 +636,10 @@ def main():
         os.mkdir(args.output)
 
     # read input dataset and create common citation graph
-    annot, doc2lab, doc2doi, annot_dict = read_input_csv(csv_path=args.dataset)
-    gx = create_graph(annot, doc2lab, doc2doi)
+    annot, doc2lab, doc2doi, annot_dict = read_input_csv(
+        csv_path=args.dataset, separator=args.separator
+    )
+    gx = create_graph(annot, doc2lab)
 
     # when requested, write graph
     if args.write_graph:
@@ -484,7 +651,7 @@ def main():
         gx,
         resolutions,
         args.contingency,
-        args.verbose,
+        # args.verbose,
         args.output,
         doc2lab,
         annot_dict,

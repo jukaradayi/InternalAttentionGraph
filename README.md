@@ -23,3 +23,4 @@ II Usage
 * Usage example:
     ```python  commonCitationsCommunities.py --output modularity --contingency  --write_graph -rm 0.7 -rM 1.7 -rS 0.2```
 
+III results
