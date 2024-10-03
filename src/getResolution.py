@@ -103,7 +103,7 @@ def create_direct_citation_graph(
     # Build direct citation graph
     # for each doi, check if it's accessible through crossref,
     # if it is check if references are accessible
-    doi_set = {doc_id for doc_id, _, _, _, _ in annot}
+    doi_set = {DOI for doc_id, DOI, _, _, _ in annot}
     # for doi in doi_list:
     for doc_id, DOI, _, _, _ in annot:
 
@@ -114,7 +114,7 @@ def create_direct_citation_graph(
             for ref in references:
                 if ("DOI" in ref) and ref["DOI"] in doi_set:
                     # graph.addEdge(doi2node[doi], doi2node[ref['DOI']])
-                    gx.add_edge(doi2node[DOI], doi2node[ref["DOI"]])
+                    gx.add_edge(doi2node[DOI], doi2node[ref["DOI"]], weight=1)
                 else:
                     ## referenced DOI is not in the input DOI list
                     if "DOI" not in ref:
