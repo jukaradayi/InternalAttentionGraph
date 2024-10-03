@@ -223,7 +223,7 @@ def compute_community(
             cov = sum([len(C) for C in comm[:clus_thresh]]) / N
             print(
                 f"{cov:.3f}% of articles covered"
-                f"by {clus_thresh} with resolution {res:.1f}"
+                f" by {clus_thresh} with resolution {res:.1f}"
             )
 
         elif cov_thresh:
@@ -234,7 +234,7 @@ def compute_community(
                 cov = sum([len(C) for C in comm[:N_clus]]) / N
             print(
                 f"{N_clus} clusters needed to cover {cov:.3f}%"
-                f"of articles with resolution {res:.1f}"
+                f" of articles with resolution {res:.1f}"
             )
         else:
             N_clus = len(comm)
@@ -242,7 +242,7 @@ def compute_community(
         covered_nodes = [u for C in comm[:N_clus] for u in C]
 
         # covered_nodes = [u for C in comm[:N_clus] for u in C]
-        comm_label, doc2uniqLab = majority_class_per_cluster(comm, doc2lab)
+        comm_label, doc2uniqLab = majority_class_per_cluster(comm, doc2lab, verbose)
 
         # With 1 label per document, compute homogeneity and completeness
         (
@@ -453,7 +453,7 @@ def print_community_homogeneity(gx, comm, doc2lab, covered_nodes, use_def):
             node2part[u] = part_id
 
     for u in gx.nodes():
-        labels = doc2lab[u]
+        # labels = doc2lab[u]
         if use_def:
             label = doc2lab[u][3]
         else:
