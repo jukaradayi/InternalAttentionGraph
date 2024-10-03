@@ -324,7 +324,8 @@ def compute_community(
             N_clus,
             os.path.join(
                 output,
-                f"communities_res_{res:.1f}_{N_clus}clusters_{cov:.3f}coverage.csv",
+                filename,
+                # f"communities_res_{res:.1f}_{N_clus}clusters_{cov:.3f}coverage.csv",
             ),
         )
 
