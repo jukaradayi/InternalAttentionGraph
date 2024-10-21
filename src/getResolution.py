@@ -7,7 +7,7 @@ import numpy as np
 import networkx as nx
 
 from habanero import Crossref
-from collections import Counter
+from collections import Counter, defaultdict
 from urllib.error import HTTPError
 from sklearn.metrics import adjusted_rand_score
 from sklearn.metrics.cluster import (
@@ -143,6 +143,9 @@ def create_common_citation_graph(annot, doc2lab, dump, output):
     fails = []
     succ = []
 
+    # for each reference , store ids of articles
+    ref2article = defaultdict(list)
+
     # Build graph by adding an edge
     # when two graph have at least one ref in common.
     # Edge of link is number of ref in common
@@ -154,6 +157,9 @@ def create_common_citation_graph(annot, doc2lab, dump, output):
             work = cr.works(ids=DOI)
             references = work["message"]["reference"]
             doi2ref[doc_id] = {ref["DOI"] for ref in references if "DOI" in ref}
+            for ref in references:
+                if "DOI" in ref:
+                    ref2article[ref["DOI"]].append(doc_id)
             # doi accessible through crossref + crossref api gives reference
             succ.append(DOI)
 
@@ -170,6 +176,11 @@ def create_common_citation_graph(annot, doc2lab, dump, output):
             common_ref = doi2ref[doi_u].intersection(doi2ref[doi_v])
             if len(common_ref) > 0:
                 gx.add_edge(doi_u, doi_v, weight=len(common_ref))
+
+    # write mapping of references to article
+    with open(os.path.join(output, 'ref2articles.csv'), 'w') as fout:
+        for ref, article_id in ref2article.items():
+            fout.write(f'{ref},{article_id}\n')
 
     if dump:
         dump_graph(gx, os.path.join(output, "common_citation.pickle"))
@@ -242,7 +253,7 @@ def compute_community(
         covered_nodes = [u for C in comm[:N_clus] for u in C]
 
         # covered_nodes = [u for C in comm[:N_clus] for u in C]
-        comm_label, doc2uniqLab = majority_class_per_cluster(comm, doc2lab, verbose)
+        comm_label, doc2uniqLab = majority_class_per_cluster(comm, doc2lab)
 
         # With 1 label per document, compute homogeneity and completeness
         (
@@ -270,6 +281,9 @@ def compute_community(
 
         # ari = adjusted_rand_score(y_true, y_pred)
 
+        # compute metrics
+        metrics = compute_metrics(gx, comm)
+
         if write_contingency:
             header_true = np.unique(y_true, return_inverse=True)
             header_pred = np.unique(y_pred, return_inverse=True)
@@ -293,12 +307,7 @@ def compute_community(
             header_true = np.unique(y_true_covered, return_inverse=True)
             header_pred = np.unique(y_pred_covered, return_inverse=True)
             with open(
-                os.path.join(
-                    output,
-                    f"contingency_covered_res_{res:.1f}_"
-                    f"hom_{homogeneity:.3f}_comp{completeness:.3f}"
-                    f"_{N_clus}_{cov}.csv",
-                ),
+                os.path.join(output,f"contingency_covered_res_{res:.1f}_" f"hom_{homogeneity:.3f}_comp{completeness:.3f}"f"_{N_clus}_{cov}.csv",),
                 "w",
                 encoding="utf-8",
             ) as fout:
@@ -321,6 +330,7 @@ def compute_community(
             comm,
             annot,
             comm_label,
+            metrics,
             N_clus,
             os.path.join(
                 output,
@@ -332,17 +342,53 @@ def compute_community(
     return comm
 
 
-def compute_metrics(gx):
-    """Compute some metrics over each community.
-    Metrics are : centrality, density, local clustering
+def compute_metrics(gx, comm):
+    """ Compute the density, the local clustering and the betweenness.
+        The density and betweenness are computed for the complete graph, 
+        and on the subgraph induced by each community.
+        
+        Parameter
+        ---------
+        gx: networkx.graph
+            the complete graph
+
+        comm: list
+            A list of frozenset of nodes, each is a community
+
+        Return
+        ------
+        metrics: dict
+            A dictionnary with a dict of all the metrics for each node
     """
+    # initialize output dictionnaries
+    metrics = {}
+
+    # compute metrics on complete graph
+    density = nx.density(gx)
+    clustering = nx.clustering(gx)
+    betweenness = nx.betweenness_centrality(gx, weight=None)
+
     # compute subgraph induced by communities
-    # compute density/centrality on those communities
-    # compute local clustering graph
-    pass
+    for part in comm:
+        comm_gx = nx.induced_subgraph(gx, part)
+        _comm_density = nx.density(comm_gx)
+        betweenness_comm = nx.betweenness_centrality(comm_gx, weight=None)
+
+        #comm_metrics[part_id] = {"density": _comm_density}
+        for u in part:
+            metrics[u] = {"density_community": _comm_density,
+                          "density_global": density,
+                          "local_clustering": clustering[u],
+                          "degree": gx.degree(u),
+                          "degree_in_community": comm_gx.degree(u),
+                          "centrality_in_community": betweenness_comm[u],
+                          "centrality": betweenness[u]
+                          }
+
+    return metrics
 
 
-def majority_class_per_cluster(comm, doc2lab, verbose):
+def majority_class_per_cluster(comm, doc2lab):
     """For each cluster get the label that is the most reprensented,
     and compute a simili-purity measure for the cluster.
     For each document in the cluster, if it has multiple labels, assign only
@@ -486,14 +532,16 @@ def print_community_homogeneity(gx, comm, doc2lab, covered_nodes, use_def):
     )
 
 
-def write_communities(comm, annot, comm_label, N_clus, name):
+def write_communities(comm, annot, comm_label, metrics, N_clus, name):
     """Write communities in csv file.
     Header is:
         file_ID, DOI, community, label
     """
     is_covered = True
     with open(name, "w", encoding="utf-8") as fout:
-        fout.write("ID,DOI,community,Label,community_Label,is_covered\n")
+        fout.write("ID,DOI,community,Label,community_Label,"
+                   "is_covered,community_density,graph_density,local_clustering,"
+                   "degree,degree_in_community,centrality,centrality_in_community\n")
         for comm_id, community in enumerate(comm):
 
             if comm_id >= N_clus:
@@ -506,7 +554,15 @@ def write_communities(comm, annot, comm_label, N_clus, name):
                 )  # concatenate labels
                 fout.write(
                     f"{doc_id},{DOI},comm_{comm_id},{node_label},"
-                    f"{comm_label[comm_id][0]},{is_covered}\n"
+                    f"{comm_label[comm_id][0]},{is_covered},"
+                    f"{metrics[doc_id]['density_community']},"
+                    f"{metrics[doc_id]['density_global']},"
+                    f"{metrics[doc_id]['local_clustering']},"
+                    f"{metrics[doc_id]['degree']},"
+                    f"{metrics[doc_id]['degree_in_community']},"
+                    f"{metrics[doc_id]['centrality']},"
+                    f"{metrics[doc_id]['centrality_in_community']},"
+                    f"\n"
                 )
 
 
