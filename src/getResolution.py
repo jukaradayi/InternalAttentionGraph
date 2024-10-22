@@ -27,8 +27,28 @@ def read_input_csv(
     Expected Header is
     ID Abstract Authors Title Year DOI Journal Field_1 Field_2 Field_3
 
-    and expected field separator is '§'.
-    Output is a list of tuples.
+    and expected field separator is ','.
+    Parameter
+    ---------
+    csv_path: str
+        path to the CSV input
+    separator: char
+        field separator used in CSV file
+
+    Return
+    ------
+    annot: list
+        list of articles stored as tuple (doc_id, DOI, label1, label2, label3)
+
+    doc2lab: dict
+        keys are doc_id, values are concatenated labels
+
+    doi2node: dict
+        keys are DOI, values are doc_id
+
+    annot_dict: dict
+        keys are doc_id, values are (DOI, label1, label2, label3)
+ 
     """
 
     annot = []  # store document info as tuple
@@ -47,7 +67,7 @@ def read_input_csv(
 
             (doc_id, DOI, label1, label2, label3, definition) = line.strip().split(
                 separator
-            )
+            ) # TODO get columns from header ?
 
             # concatenate labels
             if label2 == label1:
@@ -86,13 +106,41 @@ def load_graph(pickled_graph):
 
 
 def create_direct_citation_graph(
-    annot, doc2lab, doi2node, dump, output
+    annot, doc2lab, doi2node, dump, output, ref2articles
 ):  # TODO option pour switch + noter dans fichier sortie
-    """Create direct citation graph from list of DOI"""
+    """Create direct citation graph from list of DOI
+    Parameter
+    ---------
+    annot: list
+        list of articles stored as tuple (doc_id, DOI, label1, label2, label3)
+
+    doc2lab: dict
+        keys are doc_id, values are concatenated labels
+
+    doi2node: dict
+        keys are DOI, values are doc_id
+
+    dump: bool
+        enable to write graph object as a pickle
+
+    output: str
+        path to the output folder
+
+    ref2articles: bool
+        enable to write mapping of references to the articles citing them
+
+    Return
+    ------
+    gx: networkx.graph
+        Direct citation graph object
+    """
 
     # Create graph object and add nodes with their label
     gx = nx.Graph()
     gx.add_nodes_from(doc2lab)
+
+    # for each reference , store ids of articles
+    ref2article = defaultdict(list)
 
     # store number of fails using crossRef
     fails = []
@@ -113,6 +161,8 @@ def create_direct_citation_graph(
             references = work["message"]["reference"]
             for ref in references:
                 if ("DOI" in ref) and ref["DOI"] in doi_set:
+                    ref2article[ref["DOI"]].append(doc_id)
+
                     # graph.addEdge(doi2node[doi], doi2node[ref['DOI']])
                     gx.add_edge(doi2node[DOI], doi2node[ref["DOI"]], weight=1)
                 else:
@@ -120,6 +170,7 @@ def create_direct_citation_graph(
                     if "DOI" not in ref:
                         failref.append((DOI, ref))
                     elif ref["DOI"] not in doi_set:
+                        ref2article[ref["DOI"]].append(doc_id)
                         failbis.append((DOI, ref["DOI"]))
             succ.append(DOI)
 
@@ -128,13 +179,43 @@ def create_direct_citation_graph(
             # or there are no references in the dict.
             fails.append(DOI)
 
+    # write mapping of references to article
+    if ref2articles:
+        with open(os.path.join(output, 'ref2articles.csv'), 'w') as fout:
+            for ref, article_ids in ref2article.items():
+                for article in article_ids:
+                    fout.write(f'{ref},{article}\n')
+
+
     if dump:
         dump_graph(gx, os.path.join(output, "direct_citation.pickle"))
     return gx
 
 
-def create_common_citation_graph(annot, doc2lab, dump, output):
-    """Create common citation graph from list of DOI"""
+def create_common_citation_graph(annot, doc2lab, dump, output, ref2articles):
+    """Create common citation graph from list of DOI
+    Parameter
+    ---------
+    annot: list
+        list of articles stored as tuple (doc_id, DOI, label1, label2, label3)
+
+    doc2lab: dict
+        keys are doc_id, values are concatenated labels
+
+    dump: bool
+        enable to write graph object as a pickle
+
+    output: str
+        path to the output folder
+
+    ref2articles: bool
+        enable to write mapping of references to the articles citing them
+
+    Return
+    ------
+    gx: networkx.graph
+        Common citation graph object
+    """
     # Create graph object and add nodes with their label
     gx = nx.Graph()
     gx.add_nodes_from(doc2lab)
@@ -178,9 +259,11 @@ def create_common_citation_graph(annot, doc2lab, dump, output):
                 gx.add_edge(doi_u, doi_v, weight=len(common_ref))
 
     # write mapping of references to article
-    with open(os.path.join(output, 'ref2articles.csv'), 'w') as fout:
-        for ref, article_id in ref2article.items():
-            fout.write(f'{ref},{article_id}\n')
+    if ref2articles:
+        with open(os.path.join(output, 'ref2articles.csv'), 'w') as fout:
+            for ref, article_ids in ref2article.items():
+                for article in article_ids:
+                    fout.write(f'{ref},{article}\n')
 
     if dump:
         dump_graph(gx, os.path.join(output, "common_citation.pickle"))
@@ -189,7 +272,10 @@ def create_common_citation_graph(annot, doc2lab, dump, output):
 
 
 def write_graph(gx, output, graph_name):
-    """write graph as csv readable by Gephi"""
+    """write graph as csv readable by Gephi
+    Header is 'Source,Target,Weight' , Source and Target are both nodes,
+    Weight is the weight of the link. This header should be recognized by Gephi.
+    """
     # write graph as a csv
     # nx.write_edgelist(gx, 'doiGraph_common.csv', data=True)
     with open(os.path.join(output, graph_name), "w") as fout:
@@ -212,7 +298,47 @@ def compute_community(
     direct_citation,
     use_def,
 ):
-    """Compute Greedy Modularity Communities"""
+    """Compute Greedy Modularity Communities
+    Parameter
+    ---------
+    gx: networkx.graph
+        Graph object
+
+    resolutions: list
+        list of floats used as resolution parameter for greedy community detection.
+    
+    write_contingency: bool
+        if enabled, will write contingency matrix in output folder
+
+    verbose: bool
+        if enabled, be more verbose
+
+    output: str
+        path to output folder
+
+    doc2lab: dict
+        keys are doc_id, values are concatenated labels
+
+    annot: list
+        list of articles stored as tuple (doc_id, DOI, label1, label2, label3)
+
+    cov_thresh: float
+        After community detection, keep enough partitions to cover cov_thresh % of articles
+
+    clus_thresh : int
+        After community detection, keep clus_thresh partitions
+
+    direct_citation: bool
+        Enable if using the direct citation graph
+
+    use_def: bool
+        Enable if using the definitions for homogeneity and completeness
+
+    Return
+    ------
+    comm: list
+        list of frozenset of nodes, each frozenset is a community
+    """
 
     # Get size of graph, to compute coverage of clustering
     N = gx.number_of_nodes()
@@ -344,21 +470,21 @@ def compute_community(
 
 def compute_metrics(gx, comm):
     """ Compute the density, the local clustering and the betweenness.
-        The density and betweenness are computed for the complete graph, 
-        and on the subgraph induced by each community.
-        
-        Parameter
-        ---------
-        gx: networkx.graph
-            the complete graph
+    The density and betweenness are computed for the complete graph, 
+    and on the subgraph induced by each community.
+    
+    Parameter
+    ---------
+    gx: networkx.graph
+        the complete graph
 
-        comm: list
-            A list of frozenset of nodes, each is a community
+    comm: list
+        A list of frozenset of nodes, each is a community
 
-        Return
-        ------
-        metrics: dict
-            A dictionnary with a dict of all the metrics for each node
+    Return
+    ------
+    metrics: dict
+        A dictionnary with a dict of all the metrics for each node
     """
     # initialize output dictionnaries
     metrics = {}
@@ -393,6 +519,21 @@ def majority_class_per_cluster(comm, doc2lab):
     and compute a simili-purity measure for the cluster.
     For each document in the cluster, if it has multiple labels, assign only
     the most common one in the cluster.
+    Parameter
+    ---------
+    comm: list
+        A list of frozenset of nodes, each is a community
+
+    doc2lab: dict
+        keys are doc_id, values are concatenated labels
+
+    Return
+    ------
+    comm_label: dict
+        keys are the community ids (int), values are the majority label
+    
+    doc2uniqLab: dict
+        keys are doc_id, values are the majority label in the community
     """
 
     comm_label = {}
@@ -481,7 +622,46 @@ def majority_class_per_cluster(comm, doc2lab):
 
 
 def print_community_homogeneity(gx, comm, doc2lab, covered_nodes, use_def):
-    """get manual and automatic labels"""
+    """get manual and automatic labels
+    Parameter
+    ---------
+    gx: networkx.graph
+        the complete graph
+
+    comm: list
+        A list of frozenset of nodes, each is a community
+
+    doc2lab: dict
+        keys are doc_id, values are concatenated labels
+
+    covered_nodes: list
+        list of the ids of covered articles in selected partitions
+
+    use_def: bool
+        enable to use the definitions
+
+    Return
+    ------
+    part2label: dict
+        keys are the partition ID (int), value are the majority label
+
+    y_pred: list
+        list indexed by the nodes, each element is the partition id corresponding to 
+        the indexed node
+
+    y_true: list
+        list indexed by the nodes, each element is the label, or the definition if use_def is
+        enabled 
+
+    communities: list
+        list indexed by the communities, each element is the majority label in the comunity
+
+    y_pred_covered: list
+        same as y_pred but only for nodes in covered_nodes
+
+    y_true_covered: list
+        same as y_true but only for nodes in covered_nodes
+    """
     part2label = {}
     node2part = {}
     set_covered_nodes = set(covered_nodes)
@@ -585,6 +765,12 @@ def main():
         type=str,
         default=",",
         help="field separator used in csv. Default to ,",
+    )
+
+    parser.add_argument(
+        "--ref2articles",
+        action="store_true",
+        help="Enable to write mapping of references to the articles referencing them",
     )
 
     parser.add_argument(
@@ -702,12 +888,14 @@ def main():
         if args.direct_citation:
             graph_name = "directCitationGraph.csv"
             gx = create_direct_citation_graph(
-                annot, doc2lab, doi2node, args.dump, args.output
+                annot, doc2lab, doi2node, args.dump, args.output, args.ref2articles
             )
             # create_common_citation_graph(annot, doc2lab)
         else:
             graph_name = "commonCitationGraph.csv"
-            gx = create_common_citation_graph(annot, doc2lab, args.dump, args.output)
+            gx = create_common_citation_graph(
+                annot, doc2lab, args.dump, args.output, args.ref2articles
+            )
 
         # when requested, write graph
         if args.write_graph:
