@@ -345,7 +345,9 @@ def compute_community(
     print("run Greedy Modularity community detection")
     for res in resolutions:
 
-        comm = nx.community.greedy_modularity_communities(gx, resolution=res)
+        comm = nx.community.greedy_modularity_communities(
+            gx, resolution=res, weight="weight"
+        )
 
         if clus_thresh:
             N_clus = clus_thresh
@@ -497,7 +499,7 @@ def compute_metrics(gx, comm, res):
     density = nx.density(gx)
     clustering = nx.clustering(gx)
     betweenness = nx.betweenness_centrality(gx, weight=None)
-    mod = nx.community.modularity(gx, comm, res)
+    mod = nx.community.modularity(gx, comm, resolution=1, weight="weight")
     metrics["modularity"] = mod
 
     # compute subgraph induced by communities
