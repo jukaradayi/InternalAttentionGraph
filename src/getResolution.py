@@ -617,14 +617,17 @@ def get_subgraph_communities_pair(gx, comm, metrics, n_comm):
     metrics: dict
         A dictionnary with a dict of all the metrics for each node
     """
+    if n_comm == 0:
+        return metrics
+
     # get 3 biggest communities
     pairs_idx = list(
         itertools.combinations(range(n_comm), 2)
-    )  # TODO Avoid hardcoding range
+    ) 
     for i0, i1 in pairs_idx:
         # get subgraph induced by pair of communities
         comm0, comm1 = comm[i0], comm[i1]
-        comm_pair = comm0.union(comm1)  # TODO probably doesn't work
+        comm_pair = comm0.union(comm1)
         sub_gx = gx.subgraph(comm_pair)
 
         # compute metrics on subgraph
@@ -918,6 +921,7 @@ def main():
     parser.add_argument(
         "-nc",
         "--ncommunities",
+        default=0,
         type=int,
         help="number of biggest communities to use when studying"
         "subgraphs of pairs of communities",
