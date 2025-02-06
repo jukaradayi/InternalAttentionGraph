@@ -3,6 +3,7 @@ import os
 import ipdb
 import pickle
 import argparse
+import itertools
 import numpy as np
 import networkx as nx
 
@@ -296,6 +297,7 @@ def compute_community(
     clus_thresh,
     direct_citation,
     use_def,
+    n_comm,
 ):
     """Compute Greedy Modularity Communities
     Parameter
@@ -332,6 +334,10 @@ def compute_community(
 
     use_def: bool
         Enable if using the definitions for homogeneity and completeness
+
+    n_comm: int
+        Number of community used to create subgraphs, to study interactions between
+        pairs of those communities.
 
     Return
     ------
@@ -457,7 +463,7 @@ def compute_community(
             filename = f"directCitation_communities_res_{res:.1f}_{N_clus}clusters_{cov:.3f}coverage_{metrics['modularity']:.3f}modularity.csv"
         else:
             filename = f"commonCitation_communities_res_{res:.1f}_{N_clus}clusters_{cov:.3f}coverage_{metrics['modularity']:.3f}modularity.csv"
-
+        metrics = get_subgraph_communities_pair(gx, comm, metrics, n_comm)
         write_communities(
             comm,
             annot,
@@ -469,6 +475,7 @@ def compute_community(
                 filename,
                 # f"communities_res_{res:.1f}_{N_clus}clusters_{cov:.3f}coverage.csv",
             ),
+            n_comm,
         )
 
     return comm
@@ -586,48 +593,47 @@ def majority_class_per_cluster(comm, doc2lab):
     return comm_label, doc2uniqLab
 
 
-# def compute_girvanNewman(gx, k, write_contingency, verbose, output, doc2lab, annot):
-#    """ Compute community partition using Girvan Newman algorithm"""
-#
-#    print('Running Girvan Newman Community detection')
-#    comm = nx.community.girvan_newman(gx) #, resolution=resolution)
-#    all_comm = list()
-#
-#    # run Girvan Newman community detection with k steps
-#    comp = nx.community.girvan_newman(gx)
-#    k_idx = 0
-#    for communities in itertools.islice(comp, k):
-#
-#        current_comm = list(sorted(c) for c in communities)
-#        all_comm.append(current_comm)
-#
-#        part2label, y_pred, y_true, label_max = print_community_homogeneity(gx,
-#                                                   current_comm, doc2lab)
-#        homogeneity = homogeneity_score(y_true, y_pred)
-#        completeness = completeness_score(y_true, y_pred)
-#        contingency = contingency_matrix(y_true, y_pred)
-#        ari = adjusted_rand_score(y_true, y_pred)
-#
-#        print(f"resolution: {k_idx:.1f}, homogeneity: {homogeneity:.3f},
-#              f"completeness: {completeness:.3f}, adjusted rand idnex:{ari}")
-#
-#        if write_contingency:
-#            header_true = np.unique(y_true, return_inverse=True)
-#            header_pred = np.unique(y_pred, return_inverse=True)
-#            with open(os.path.join(output, f'contingency_{k_idx:.1f}_hom_{homogeneity:.3f}'
-#                                           f'_comp{completeness:.3f}.csv'), 'w') as fout:
-#                fout.write('x,' + ','.join([str(v) for v in header_pred[0]]) + '\n')
-#                for row_idx, row in enumerate(contingency):
-#                    fout.write(header_true[0][row_idx] + ',' +
-#                               ','.join([str(v) for v in row]) + '\n')
-#
-#        # export community list
-#        write_communities(current_comm, annot,
-#                          os.path.join(output,f'communities_res_{k_idx:.1f}_'
-#                                       f'hom_{homogeneity:.3f}_comp{completeness:.3f}.csv'))
-#
-#        k_idx += 1
-#    return all_comm
+def get_subgraph_communities_pair(gx, comm, metrics, n_comm):
+    """pick the n_comm biggest communities in the graph, for all pairs of those communities,
+    get the subgraph induced by the nodes in the community pair, and compute the
+    betweenness centrality for this subgraph.
+    Parameter
+    ---------
+    gx: networkx.graph
+        Graph object
+
+    comm: list
+        A list of frozenset of nodes, each is a community
+
+    metrics: dict
+        A dictionnary with a dict of all the metrics for each node
+
+    n_comm: int
+        Number of community used to create subgraphs, to study interactions between
+        pairs of those communities.
+
+    Return
+    ------
+    metrics: dict
+        A dictionnary with a dict of all the metrics for each node
+    """
+    # get 3 biggest communities
+    pairs_idx = list(
+        itertools.combinations(range(n_comm), 2)
+    )  # TODO Avoid hardcoding range
+    for i0, i1 in pairs_idx:
+        # get subgraph induced by pair of communities
+        comm0, comm1 = comm[i0], comm[i1]
+        comm_pair = comm0.union(comm1)  # TODO probably doesn't work
+        sub_gx = gx.subgraph(comm_pair)
+
+        # compute metrics on subgraph
+        sub_betweenness = nx.betweenness_centrality(sub_gx, weight=None)
+
+        for u in comm_pair:
+            metrics[u][f"comm_{i0}_{i1}_centrality"] = sub_betweenness[u]
+
+        return metrics
 
 
 def print_community_homogeneity(gx, comm, doc2lab, covered_nodes, use_def):
@@ -721,18 +727,31 @@ def print_community_homogeneity(gx, comm, doc2lab, covered_nodes, use_def):
     )
 
 
-def write_communities(comm, annot, comm_label, metrics, N_clus, name):
+def write_communities(comm, annot, comm_label, metrics, N_clus, name, n_comm):
     """Write communities in csv file.
     Header is:
         file_ID, DOI, community, label
     """
     is_covered = True
     with open(name, "w", encoding="utf-8") as fout:
-        fout.write(
+        pairs_idx = list(itertools.combinations(range(n_comm), 2))
+        sub_comm_centr_header = ""
+        for pair in pairs_idx:
+            sub_comm_centr_header += f"comm_{pair[0]}_{pair[1]}_centrality,"
+
+        header = (
             "ID,DOI,community,Label,community_Label,"
             "is_covered,community_density,graph_density,local_clustering,"
-            "degree,degree_in_community,centrality,centrality_in_community\n"
+            "degree,degree_in_community,centrality,centrality_in_community"
         )
+        header += sub_comm_centr_header[:-1]  # don't include last ","
+        header += "\n"
+        # fout.write(
+        #    "ID,DOI,community,Label,community_Label,"
+        #    "is_covered,community_density,graph_density,local_clustering,"
+        #    "degree,degree_in_community,centrality,centrality_in_community\n"
+        # )
+        fout.write(header)
         for comm_id, community in enumerate(comm):
 
             if comm_id >= N_clus:
@@ -743,7 +762,7 @@ def write_communities(comm, annot, comm_label, metrics, N_clus, name):
                 node_label = "_".join(
                     sorted(list({lab for lab in [lab1, lab2, lab3] if len(lab) > 0}))
                 )  # concatenate labels
-                fout.write(
+                metrics_out = (
                     f"{doc_id},{DOI},comm_{comm_id},{node_label},"
                     f"{comm_label[comm_id][0]},{is_covered},"
                     f"{metrics[doc_id]['density_community']},"
@@ -753,8 +772,25 @@ def write_communities(comm, annot, comm_label, metrics, N_clus, name):
                     f"{metrics[doc_id]['degree_in_community']},"
                     f"{metrics[doc_id]['centrality']},"
                     f"{metrics[doc_id]['centrality_in_community']}"
-                    f"\n"
                 )
+                sub_comm_centr = ""
+                for pair in pairs_idx:
+                    if f"comm_{pair[0]}_{pair[1]}_centrality" not in metrics[doc_id]:
+                        metrics[doc_id][
+                            f"comm_{pair[0]}_{pair[1]}_centrality"
+                        ] = -1  # TODO NaN ? else ?
+                    try:
+                        _centr = metrics[doc_id][f"comm_{pair[0]}_{pair[1]}_centrality"]
+                        sub_comm_centr += f"{_centr},"
+
+                        # sub_comm_centr += (
+                        #    f"{metrics[doc_id]['comm_{pair[0]}_{pair[1]}_centrality']},"
+                        # )
+                    except:
+                        ipdb.set_trace()
+                        #               metrics_out += sub_comm_centr[:-1]
+                metrics_out += "\n"
+                fout.write(metrics_out)
 
 
 def main():
@@ -880,6 +916,14 @@ def main():
     )
 
     parser.add_argument(
+        "-nc",
+        "--ncommunities",
+        type=int,
+        help="number of biggest communities to use when studying"
+        "subgraphs of pairs of communities",
+    )
+
+    parser.add_argument(
         "-v", "--verbose", action="store_true", help="increase verbosity"
     )
 
@@ -937,6 +981,7 @@ def main():
         args.threshold_cluster,
         args.direct_citation,
         args.use_def,
+        args.ncommunities,
     )
     # else:
     #    k = 80 # can change k to change "resolution"
