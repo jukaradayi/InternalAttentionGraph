@@ -192,7 +192,7 @@ def create_direct_citation_graph(
     return gx
 
 
-def create_common_citation_graph(annot, doc2lab, dump, output, ref2articles):
+def create_common_citation_graph(annot, doc2lab, dump, output, ref2articles, norm):
     """Create common citation graph from list of DOI
     Parameter
     ---------
@@ -210,6 +210,15 @@ def create_common_citation_graph(annot, doc2lab, dump, output, ref2articles):
 
     ref2articles: bool
         enable to write mapping of references to the articles citing them
+
+    norm: str
+        choose the normalisation to use to compute the weights.
+        Choices are:
+            - 'association' : Association strength
+            - 'cosine' : cosine similarity
+            - 'inclusion': inclusion
+            - 'jaccard': Jaccard measure
+            - 'no_norm': no normalisation, use size of union
 
     Return
     ------
@@ -255,8 +264,34 @@ def create_common_citation_graph(annot, doc2lab, dump, output, ref2articles):
             if doi_u == doi_v:
                 continue
             common_ref = doi2ref[doi_u].intersection(doi2ref[doi_v])
+            n_refs_u = len(doi2ref[doi_u])  # size of u's biblio
+            n_refs_v = len(doi2ref[doi_v])  # size of v's biblio
+
+            # TODO add other measures for weights
+            # TODO : add in output file name of measures used
+            # list measures :
+            # association strengh (6)
+            weight_meas = {
+                "association": len(common_ref) / (n_refs_u * n_refs_v),
+                "cosine": len(common_ref) / np.sqrt(n_refs_u * n_refs_v),
+                "inclusion": len(common_ref) / np.min([n_refs_u, n_refs_v]),
+                "jaccard": len(common_ref) / (n_refs_u + n_refs_v - len(common_ref)),
+                "no_norm": len(common_ref),
+            }
+            # assoc_str_w = len(common_ref) / (n_refs_u * n_refs_v)
+
+            ## cosine (7)
+            # cosine = len(common_ref) / np.sqrt(n_refs_u * n_refs_v)
+            ## inclusion (8)
+            ## jaccard (9)
+            assert (n_refs_u + n_refs_v - len(common_ref)) == len(
+                doi2ref[doi_u].union(doi2ref[doi_v])
+            ), "bug in biblio union size "
+            # jaccard = len(common_ref) / (n_refs_u + n_refs_v - len(common_ref))
+
             if len(common_ref) > 0:
-                gx.add_edge(doi_u, doi_v, weight=len(common_ref))
+                # gx.add_edge(doi_u, doi_v, weight=len(common_ref))
+                gx.add_edge(doi_u, doi_v, weight=weight_meas[norm])
 
     # write mapping of references to article
     if ref2articles:
@@ -298,6 +333,7 @@ def compute_community(
     direct_citation,
     use_def,
     n_comm,
+    norm,
 ):
     """Compute Greedy Modularity Communities
     Parameter
@@ -338,6 +374,15 @@ def compute_community(
     n_comm: int
         Number of community used to create subgraphs, to study interactions between
         pairs of those communities.
+
+    norm: str
+        choose the normalisation to use to compute the weights.
+        Choices are:
+            - 'association' : Association strength
+            - 'cosine' : cosine similarity
+            - 'inclusion': inclusion
+            - 'jaccard': Jaccard measure
+            - 'no_norm': no normalisation, use size of union
 
     Return
     ------
@@ -462,7 +507,7 @@ def compute_community(
         if direct_citation:
             filename = f"directCitation_communities_res_{res:.1f}_{N_clus}clusters_{cov:.3f}coverage_{metrics['modularity']:.3f}modularity.csv"
         else:
-            filename = f"commonCitation_communities_res_{res:.1f}_{N_clus}clusters_{cov:.3f}coverage_{metrics['modularity']:.3f}modularity.csv"
+            filename = f"commonCitation_communities_{norm}_res_{res:.1f}_{N_clus}clusters_{cov:.3f}coverage_{metrics['modularity']:.3f}modularity.csv"
         metrics = get_subgraph_communities_pair(gx, comm, metrics, n_comm)
         write_communities(
             comm,
@@ -621,9 +666,7 @@ def get_subgraph_communities_pair(gx, comm, metrics, n_comm):
         return metrics
 
     # get 3 biggest communities
-    pairs_idx = list(
-        itertools.combinations(range(n_comm), 2)
-    ) 
+    pairs_idx = list(itertools.combinations(range(n_comm), 2))
     for i0, i1 in pairs_idx:
         # get subgraph induced by pair of communities
         comm0, comm1 = comm[i0], comm[i1]
@@ -928,6 +971,14 @@ def main():
     )
 
     parser.add_argument(
+        "-w",
+        "--weights",
+        choices=["association", "cosine", "inclusion", "jaccard", "no_norm"],
+        type=str,
+        help="choose the type of normalisation to use to compute the weights",
+    )
+
+    parser.add_argument(
         "-v", "--verbose", action="store_true", help="increase verbosity"
     )
 
@@ -953,7 +1004,7 @@ def main():
         else:
             graph_name = "commonCitationGraph.csv"
             gx = create_common_citation_graph(
-                annot, doc2lab, args.dump, args.output, args.ref2articles
+                annot, doc2lab, args.dump, args.output, args.ref2articles, args.weights
             )
 
         # when requested, write graph
@@ -972,7 +1023,11 @@ def main():
 
     if args.verbose:
         print(f"Running community detection for resolutions: {resolutions}")
-
+    if not args.weights:
+        raise RuntimeError(
+            "no weight defined. Please choose a normalisation using -w with one the "
+            "choices available"
+        )
     compute_community(
         gx,
         resolutions,
@@ -986,6 +1041,7 @@ def main():
         args.direct_citation,
         args.use_def,
         args.ncommunities,
+        args.weights,
     )
     # else:
     #    k = 80 # can change k to change "resolution"
