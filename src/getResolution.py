@@ -679,7 +679,7 @@ def get_subgraph_communities_pair(gx, comm, metrics, n_comm):
         for u in comm_pair:
             metrics[u][f"comm_{i0}_{i1}_centrality"] = sub_betweenness[u]
 
-        return metrics
+    return metrics
 
 
 def print_community_homogeneity(gx, comm, doc2lab, covered_nodes, use_def):
@@ -835,6 +835,7 @@ def write_communities(comm, annot, comm_label, metrics, N_clus, name, n_comm):
                     except:
                         ipdb.set_trace()
                         #               metrics_out += sub_comm_centr[:-1]
+                metrics_out += sub_comm_centr[:-1]
                 metrics_out += "\n"
                 fout.write(metrics_out)
 
