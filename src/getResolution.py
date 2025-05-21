@@ -788,7 +788,7 @@ def write_communities(comm, annot, comm_label, metrics, N_clus, name, n_comm):
         header = (
             "ID,DOI,community,Label,community_Label,"
             "is_covered,community_density,graph_density,local_clustering,"
-            "degree,degree_in_community,centrality,centrality_in_community"
+            "degree,degree_in_community,centrality,centrality_in_community,"
         )
         header += sub_comm_centr_header[:-1]  # don't include last ","
         header += "\n"
@@ -817,7 +817,7 @@ def write_communities(comm, annot, comm_label, metrics, N_clus, name, n_comm):
                     f"{metrics[doc_id]['degree']},"
                     f"{metrics[doc_id]['degree_in_community']},"
                     f"{metrics[doc_id]['centrality']},"
-                    f"{metrics[doc_id]['centrality_in_community']}"
+                    f"{metrics[doc_id]['centrality_in_community']},"
                 )
                 sub_comm_centr = ""
                 for pair in pairs_idx:
