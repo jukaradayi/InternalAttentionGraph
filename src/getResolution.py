@@ -698,12 +698,19 @@ def get_subgraph_communities_pair(gx, comm, metrics, n_comm):
         comm0, comm1 = comm[i0], comm[i1]
         comm_pair = comm0.union(comm1)
         sub_gx = gx.subgraph(comm_pair)
+        sub_gx_dist = sub_gx.copy()
+        for e in sub_gx_dist.edges():
+            e_as = sub_gx_dist[e[0]][e[1]]["weight"]
+            sub_gx_dist[e[0]][e[1]]["weight"] = 1 - e_as
+
+        sub_as_betw = nx.betweenness_centrality(sub_gx_dist, weight="weight")
 
         # compute metrics on subgraph
         sub_betweenness = nx.betweenness_centrality(sub_gx, weight=None)
-
+        sub_as_betw = nx.betweenness_centrality(sub_gx_dist, weight="weight")
         for u in comm_pair:
             metrics[u][f"comm_{i0}_{i1}_centrality"] = sub_betweenness[u]
+            metrics[u][f"comm_{i0}_{i1}_centrality_weight"] = sub_as_betw[u]
 
     return metrics
 
@@ -809,7 +816,7 @@ def write_communities(comm, annot, comm_label, metrics, N_clus, name, n_comm):
         pairs_idx = list(itertools.combinations(range(n_comm), 2))
         sub_comm_centr_header = ""
         for pair in pairs_idx:
-            sub_comm_centr_header += f"comm_{pair[0]}_{pair[1]}_centrality,"
+            sub_comm_centr_header += f"comm_{pair[0]}_{pair[1]}_centrality,comm_{pair[0]}_{pair[1]}_centrality_with_weights,"
 
         header = (
             "ID,DOI,community,Label,community_Label,"
@@ -855,7 +862,10 @@ def write_communities(comm, annot, comm_label, metrics, N_clus, name, n_comm):
                         ] = -1  # TODO NaN ? else ?
                     try:
                         _centr = metrics[doc_id][f"comm_{pair[0]}_{pair[1]}_centrality"]
-                        sub_comm_centr += f"{_centr},"
+                        _wcentr = metrics[doc_id][
+                            f"comm_{pair[0]}_{pair[1]}_centrality_weight"
+                        ]
+                        sub_comm_centr += f"{_centr},{_wcentr}"
 
                         # sub_comm_centr += (
                         #    f"{metrics[doc_id]['comm_{pair[0]}_{pair[1]}_centrality']},"
