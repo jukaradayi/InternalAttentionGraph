@@ -233,6 +233,9 @@ def create_common_citation_graph(annot, doc2lab, dump, output, ref2articles, nor
     fails = []
     succ = []
 
+    # store distribution of number of common ref
+    common_ref_distrib = []
+
     # for each reference , store ids of articles
     ref2article = defaultdict(list)
 
@@ -290,6 +293,8 @@ def create_common_citation_graph(annot, doc2lab, dump, output, ref2articles, nor
             # jaccard = len(common_ref) / (n_refs_u + n_refs_v - len(common_ref))
 
             if len(common_ref) > 0:
+                common_ref_distrib.append(len(common_ref))
+
                 # gx.add_edge(doi_u, doi_v, weight=len(common_ref))
                 gx.add_edge(doi_u, doi_v, weight=weight_meas[norm])
 
@@ -299,6 +304,11 @@ def create_common_citation_graph(annot, doc2lab, dump, output, ref2articles, nor
             for ref, article_ids in ref2article.items():
                 for article in article_ids:
                     fout.write(f"{ref},{article}\n")
+
+    # write the distribution of the number of common ref
+    with open(os.path.join(output, "common_ref_distrib.csv"), "w") as fout:
+        print(common_ref_distrib)
+        fout.write(",".join([str(cr) for cr in common_ref_distrib]))
 
     if dump:
         dump_graph(gx, os.path.join(output, "common_citation.pickle"))
