@@ -564,11 +564,25 @@ def compute_metrics(gx, comm, res):
     mod = nx.community.modularity(gx, comm, resolution=1, weight="weight")
     metrics["modularity"] = mod
 
+    # copy graph and update weights as 1 - association
+    gx_dist = gx.copy()
+    for e in gx_dist.edges():
+        e_as = gx_dist[e[0]][e[1]]["weight"]
+        gx_dist[e[0]][e[1]]["weight"] = 1 - e_as
+
+    as_betweenness = nx.betweenness_centrality(gx_dist, weight="weight")
+
     # compute subgraph induced by communities
     for part in comm:
         comm_gx = nx.induced_subgraph(gx, part)
         _comm_density = nx.density(comm_gx)
         betweenness_comm = nx.betweenness_centrality(comm_gx, weight=None)
+
+        comm_gx_dist = comm_gx.copy()
+        for e in comm_gx_dist.edges():
+            e_as = comm_gx_dist[e[0]][e[1]]["weight"]
+            comm_gx_dist[e[0]][e[1]]["weight"] = 1 - e_as
+        as_comm_betw = nx.betweenness_centrality(comm_gx, weight="weight")
 
         # comm_metrics[part_id] = {"density": _comm_density}
         for u in part:
@@ -579,7 +593,9 @@ def compute_metrics(gx, comm, res):
                 "degree": gx.degree(u),
                 "degree_in_community": comm_gx.degree(u),
                 "centrality_in_community": betweenness_comm[u],
+                "centrality_in_community_with_weights": as_comm_betw[u],
                 "centrality": betweenness[u],
+                "centrality_with_weights": as_betweenness[u],
             }
 
     return metrics
@@ -798,7 +814,7 @@ def write_communities(comm, annot, comm_label, metrics, N_clus, name, n_comm):
         header = (
             "ID,DOI,community,Label,community_Label,"
             "is_covered,community_density,graph_density,local_clustering,"
-            "degree,degree_in_community,centrality,centrality_in_community,"
+            "degree,degree_in_community,centrality,centrality_in_community,weighted_centrality,weighted_centrality_in_community,"
         )
         header += sub_comm_centr_header[:-1]  # don't include last ","
         header += "\n"
@@ -828,6 +844,8 @@ def write_communities(comm, annot, comm_label, metrics, N_clus, name, n_comm):
                     f"{metrics[doc_id]['degree_in_community']},"
                     f"{metrics[doc_id]['centrality']},"
                     f"{metrics[doc_id]['centrality_in_community']},"
+                    f"{metrics[doc_id]['centrality_with_weights']},"
+                    f"{metrics[doc_id]['centrality_in_community_with_weights']},"
                 )
                 sub_comm_centr = ""
                 for pair in pairs_idx:
