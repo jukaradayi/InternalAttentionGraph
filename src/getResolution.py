@@ -307,8 +307,13 @@ def create_common_citation_graph(annot, doc2lab, dump, output, ref2articles, nor
 
     # write the distribution of the number of common ref
     with open(os.path.join(output, "common_ref_distrib.csv"), "w") as fout:
-        print(common_ref_distrib)
-        fout.write(",".join([str(cr) for cr in common_ref_distrib]))
+        fout.write('ID_u,ID_v,DOI_u,DOI_v,number_common_ref\n')
+        for e in gx.edges():
+            DOI_u, _, _, _ = annot[e[0]]
+            DOI_v, _, _, _ = annot[e[0]]
+
+            w = gx[e[0]][e[1]]["weight"]
+            fout.write(f"{e[0]},{e[1]},{DOI_u},{DOI_v},{w}\n")
 
     if dump:
         dump_graph(gx, os.path.join(output, "common_citation.pickle"))
@@ -703,7 +708,7 @@ def get_subgraph_communities_pair(gx, comm, metrics, n_comm):
             e_as = sub_gx_dist[e[0]][e[1]]["weight"]
             sub_gx_dist[e[0]][e[1]]["weight"] = 1 - e_as
 
-        #sub_as_betw = nx.betweenness_centrality(sub_gx_dist, weight=None)
+        # sub_as_betw = nx.betweenness_centrality(sub_gx_dist, weight=None)
 
         # compute metrics on subgraph
         sub_betweenness = nx.betweenness_centrality(sub_gx, weight=None)
