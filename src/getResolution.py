@@ -703,7 +703,7 @@ def get_subgraph_communities_pair(gx, comm, metrics, n_comm):
             e_as = sub_gx_dist[e[0]][e[1]]["weight"]
             sub_gx_dist[e[0]][e[1]]["weight"] = 1 - e_as
 
-        sub_as_betw = nx.betweenness_centrality(sub_gx_dist, weight="weight")
+        #sub_as_betw = nx.betweenness_centrality(sub_gx_dist, weight=None)
 
         # compute metrics on subgraph
         sub_betweenness = nx.betweenness_centrality(sub_gx, weight=None)
