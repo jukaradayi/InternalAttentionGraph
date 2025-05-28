@@ -192,7 +192,9 @@ def create_direct_citation_graph(
     return gx
 
 
-def create_common_citation_graph(annot, doc2lab, dump, output, ref2articles, norm):
+def create_common_citation_graph(
+    annot, annot_dict, doc2lab, dump, output, ref2articles, norm
+):
     """Create common citation graph from list of DOI
     Parameter
     ---------
@@ -234,7 +236,7 @@ def create_common_citation_graph(annot, doc2lab, dump, output, ref2articles, nor
     succ = []
 
     # store distribution of number of common ref
-    common_ref_distrib = []
+    common_ref_distrib = {}
 
     # for each reference , store ids of articles
     ref2article = defaultdict(list)
@@ -293,7 +295,7 @@ def create_common_citation_graph(annot, doc2lab, dump, output, ref2articles, nor
             # jaccard = len(common_ref) / (n_refs_u + n_refs_v - len(common_ref))
 
             if len(common_ref) > 0:
-                common_ref_distrib.append(len(common_ref))
+                common_ref_distrib[(doi_u, doi_v)] = len(common_ref)
 
                 # gx.add_edge(doi_u, doi_v, weight=len(common_ref))
                 gx.add_edge(doi_u, doi_v, weight=weight_meas[norm])
@@ -307,12 +309,13 @@ def create_common_citation_graph(annot, doc2lab, dump, output, ref2articles, nor
 
     # write the distribution of the number of common ref
     with open(os.path.join(output, "common_ref_distrib.csv"), "w") as fout:
-        fout.write('ID_u,ID_v,DOI_u,DOI_v,number_common_ref\n')
+        fout.write("ID_u,ID_v,DOI_u,DOI_v,number_common_ref\n")
         for e in gx.edges():
-            DOI_u, _, _, _ = annot[e[0]]
-            DOI_v, _, _, _ = annot[e[0]]
+            DOI_u, _, _, _ = annot_dict[e[0]]
+            DOI_v, _, _, _ = annot_dict[e[1]]
 
-            w = gx[e[0]][e[1]]["weight"]
+            # w = gx[e[0]][e[1]]["weight"]
+            w = common_ref_distrib[(e[0], e[1])]
             fout.write(f"{e[0]},{e[1]},{DOI_u},{DOI_v},{w}\n")
 
     if dump:
@@ -1048,7 +1051,13 @@ def main():
         else:
             graph_name = "commonCitationGraph.csv"
             gx = create_common_citation_graph(
-                annot, doc2lab, args.dump, args.output, args.ref2articles, args.weights
+                annot,
+                annot_dict,
+                doc2lab,
+                args.dump,
+                args.output,
+                args.ref2articles,
+                args.weights,
             )
 
         # when requested, write graph
