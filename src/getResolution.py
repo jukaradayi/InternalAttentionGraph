@@ -868,19 +868,22 @@ def write_communities(comm, annot, comm_label, metrics, N_clus, name, n_comm):
                         metrics[doc_id][
                             f"comm_{pair[0]}_{pair[1]}_centrality"
                         ] = -1  # TODO NaN ? else ?
-                    try:
-                        _centr = metrics[doc_id][f"comm_{pair[0]}_{pair[1]}_centrality"]
-                        _wcentr = metrics[doc_id][
+                        metrics[doc_id][
                             f"comm_{pair[0]}_{pair[1]}_centrality_weight"
-                        ]
-                        sub_comm_centr += f"{_centr},{_wcentr}"
+                        ] = -1
+                    # try:
+                    _centr = metrics[doc_id][f"comm_{pair[0]}_{pair[1]}_centrality"]
+                    _wcentr = metrics[doc_id][
+                        f"comm_{pair[0]}_{pair[1]}_centrality_weight"
+                    ]
+                    sub_comm_centr += f"{_centr},{_wcentr}"
 
-                        # sub_comm_centr += (
-                        #    f"{metrics[doc_id]['comm_{pair[0]}_{pair[1]}_centrality']},"
-                        # )
-                    except:
-                        ipdb.set_trace()
-                        #               metrics_out += sub_comm_centr[:-1]
+                    # sub_comm_centr += (
+                    #    f"{metrics[doc_id]['comm_{pair[0]}_{pair[1]}_centrality']},"
+                    # )
+                    # except:
+                    #    ipdb.set_trace()
+                    #               metrics_out += sub_comm_centr[:-1]
                 metrics_out += sub_comm_centr[:-1]
                 metrics_out += "\n"
                 fout.write(metrics_out)
