@@ -876,7 +876,7 @@ def write_communities(comm, annot, comm_label, metrics, N_clus, name, n_comm):
                     _wcentr = metrics[doc_id][
                         f"comm_{pair[0]}_{pair[1]}_centrality_weight"
                     ]
-                    sub_comm_centr += f"{_centr},{_wcentr}"
+                    sub_comm_centr += f"{_centr},{_wcentr},"
 
                     # sub_comm_centr += (
                     #    f"{metrics[doc_id]['comm_{pair[0]}_{pair[1]}_centrality']},"
