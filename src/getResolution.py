@@ -476,9 +476,13 @@ def compute_community(
             else:
                 contingency_covered = contingency_matrix(y_true_covered, y_pred_covered)
 
-        if verbose:
+        if verbose and is_global_graph:
             print(
                 f"homogeneity score : {homogeneity:.3f}, completenesse score : {completeness:.3f}"
+            )
+        elif verbose and not is_global_graph:
+            print(
+                f"Cognition Community, res {res:.1f}: homogeneity score : {homogeneity:.3f}, completenesse score : {completeness:.3f}"
             )
 
         # ari = adjusted_rand_score(y_true, y_pred)
