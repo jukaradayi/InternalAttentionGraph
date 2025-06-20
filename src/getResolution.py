@@ -486,10 +486,14 @@ def compute_community(
         # study cognition
         if is_global_graph:
             cog_comm = [
-                _comm for _comm, label in comm_label.items() if label[0] == "Cognition" and label[1] > 1
+                _comm
+                for _comm, label in comm_label.items()
+                if label[0] == "Cognition" and label[1] > 1
             ]
             cog_gx = gx.subgraph(comm[cog_comm[0]])
-            resolutions = [0.8,0.9,1.0,1.1,1.2]
+            # resolutions = [0.5, 0.6, 0.8, 0.9, 1.0,1.1,1.2]
+            resolutions = np.arange(0.5, 1.5, 0.1)
+
             compute_community(
                 cog_gx,
                 resolutions,
@@ -1133,7 +1137,7 @@ def main():
         args.use_def,
         args.ncommunities,
         args.weights,
-        True
+        True,
     )
     # else:
     #    k = 80 # can change k to change "resolution"
