@@ -352,6 +352,7 @@ def compute_community(
     use_def,
     n_comm,
     norm,
+    is_global_graph,
 ):
     """Compute Greedy Modularity Communities
     Parameter
@@ -401,6 +402,10 @@ def compute_community(
             - 'inclusion': inclusion
             - 'jaccard': Jaccard measure
             - 'no_norm': no normalisation, use size of union
+
+    is_global_graph: bool
+        True if the input graph is the complete graph. Set to False when applying
+        the function on a subgraph, e.g. when using on the cognition community
 
     Return
     ------
@@ -464,11 +469,12 @@ def compute_community(
         homogeneity = homogeneity_score(y_true, y_pred)
         completeness = completeness_score(y_true, y_pred)
 
-        contingency = contingency_matrix(y_true, y_pred)
-        if cov_thresh is None and clus_thresh is None:
-            contingency_covered = contingency
-        else:
-            contingency_covered = contingency_matrix(y_true_covered, y_pred_covered)
+        if is_global_graph:
+            contingency = contingency_matrix(y_true, y_pred)
+            if cov_thresh is None and clus_thresh is None:
+                contingency_covered = contingency
+            else:
+                contingency_covered = contingency_matrix(y_true_covered, y_pred_covered)
 
         if verbose:
             print(
@@ -477,10 +483,34 @@ def compute_community(
 
         # ari = adjusted_rand_score(y_true, y_pred)
 
+        # study cognition
+        if is_global_graph:
+            cog_comm = [
+                _comm for _comm, label in comm_label.items() if label[0] == "Cognition" and label[1] > 1
+            ]
+            cog_gx = gx.subgraph(comm[cog_comm[0]])
+            resolutions = [0.8,0.9,1.0,1.1,1.2]
+            compute_community(
+                cog_gx,
+                resolutions,
+                write_contingency,
+                verbose,
+                output,
+                doc2lab,
+                annot,
+                cov_thresh,
+                clus_thresh,
+                direct_citation,
+                use_def,
+                n_comm,
+                norm,
+                False,
+            )
+
         # compute metrics
         metrics = compute_metrics(gx, comm, res)
 
-        if write_contingency:
+        if write_contingency and is_global_graph:
             header_true = np.unique(y_true, return_inverse=True)
             header_pred = np.unique(y_pred, return_inverse=True)
             with open(
@@ -524,9 +554,14 @@ def compute_community(
         # export community list
         if direct_citation:
             filename = f"directCitation_communities_res_{res:.1f}_{N_clus}clusters_{cov:.3f}coverage_{metrics['modularity']:.3f}modularity.csv"
-        else:
+        elif not direct_citation and is_global_graph:
             filename = f"commonCitation_communities_{norm}_res_{res:.1f}_{N_clus}clusters_{cov:.3f}coverage_{metrics['modularity']:.3f}modularity.csv"
-        metrics = get_subgraph_communities_pair(gx, comm, metrics, n_comm)
+        elif not is_global_graph:
+            filename = f"cognition_{norm}_res_{res:.1f}_{N_clus}clusters_{cov:.3f}coverage_{metrics['modularity']:.3f}modularity.csv"
+
+        if is_global_graph:
+            metrics = get_subgraph_communities_pair(gx, comm, metrics, n_comm)
+
         write_communities(
             comm,
             annot,
@@ -1098,6 +1133,7 @@ def main():
         args.use_def,
         args.ncommunities,
         args.weights,
+        True
     )
     # else:
     #    k = 80 # can change k to change "resolution"
