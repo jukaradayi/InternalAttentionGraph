@@ -353,6 +353,7 @@ def compute_community(
     n_comm,
     norm,
     is_global_graph,
+    global_res,
 ):
     """Compute Greedy Modularity Communities
     Parameter
@@ -457,6 +458,8 @@ def compute_community(
         comm_label, doc2uniqLab = majority_class_per_cluster(comm, doc2lab)
 
         # With 1 label per document, compute homogeneity and completeness
+        if not is_global_graph:
+            use_def = True
         (
             part2label,
             y_pred,
@@ -478,11 +481,11 @@ def compute_community(
 
         if verbose and is_global_graph:
             print(
-                f"homogeneity score : {homogeneity:.3f}, completenesse score : {completeness:.3f}"
+                f"res {res:.1f}, homogeneity score : {homogeneity:.3f}, completenesse score : {completeness:.3f}"
             )
         elif verbose and not is_global_graph:
             print(
-                f"Cognition Community, res {res:.1f}: homogeneity score : {homogeneity:.3f}, completenesse score : {completeness:.3f}"
+                f"Cognition Community, global resolution {global_res:.1f}, res {res:.1f}: homogeneity score : {homogeneity:.3f}, completenesse score : {completeness:.3f}"
             )
 
         # ari = adjusted_rand_score(y_true, y_pred)
@@ -509,10 +512,11 @@ def compute_community(
                 cov_thresh,
                 clus_thresh,
                 direct_citation,
-                use_def,
+                True,
                 n_comm,
                 norm,
                 False,
+                res,
             )
 
         # compute metrics
@@ -565,7 +569,7 @@ def compute_community(
         elif not direct_citation and is_global_graph:
             filename = f"commonCitation_communities_{norm}_res_{res:.1f}_{N_clus}clusters_{cov:.3f}coverage_{metrics['modularity']:.3f}modularity.csv"
         elif not is_global_graph:
-            filename = f"cognition_{norm}_res_{res:.1f}_{N_clus}clusters_{cov:.3f}coverage_{metrics['modularity']:.3f}modularity.csv"
+            filename = f"cognition_{norm}_globalres_{global_res:.1f}_res_{res:.1f}_{N_clus}clusters_{cov:.3f}coverage_{metrics['modularity']:.3f}modularity.csv"
 
         if is_global_graph:
             metrics = get_subgraph_communities_pair(gx, comm, metrics, n_comm)
@@ -912,12 +916,12 @@ def write_communities(comm, annot, comm_label, metrics, N_clus, name, n_comm):
                             f"comm_{pair[0]}_{pair[1]}_centrality"
                         ] = -1  # TODO NaN ? else ?
                         metrics[doc_id][
-                            f"comm_{pair[0]}_{pair[1]}_centrality_weight"
+                            f"comm_{pair[0]}_{pair[1]}_centrality_with_weight"
                         ] = -1
                     # try:
                     _centr = metrics[doc_id][f"comm_{pair[0]}_{pair[1]}_centrality"]
                     _wcentr = metrics[doc_id][
-                        f"comm_{pair[0]}_{pair[1]}_centrality_weight"
+                        f"comm_{pair[0]}_{pair[1]}_centrality_with_weight"
                     ]
                     sub_comm_centr += f"{_centr},{_wcentr},"
 
@@ -1142,6 +1146,7 @@ def main():
         args.ncommunities,
         args.weights,
         True,
+        None,
     )
     # else:
     #    k = 80 # can change k to change "resolution"
