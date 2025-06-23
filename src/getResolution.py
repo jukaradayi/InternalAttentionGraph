@@ -916,12 +916,12 @@ def write_communities(comm, annot, comm_label, metrics, N_clus, name, n_comm):
                             f"comm_{pair[0]}_{pair[1]}_centrality"
                         ] = -1  # TODO NaN ? else ?
                         metrics[doc_id][
-                            f"comm_{pair[0]}_{pair[1]}_centrality_with_weight"
+                            f"comm_{pair[0]}_{pair[1]}_centrality_weight"
                         ] = -1
                     # try:
                     _centr = metrics[doc_id][f"comm_{pair[0]}_{pair[1]}_centrality"]
                     _wcentr = metrics[doc_id][
-                        f"comm_{pair[0]}_{pair[1]}_centrality_with_weight"
+                        f"comm_{pair[0]}_{pair[1]}_centrality_weight"
                     ]
                     sub_comm_centr += f"{_centr},{_wcentr},"
 
