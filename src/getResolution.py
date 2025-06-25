@@ -498,6 +498,8 @@ def compute_community(
                 if label[0] == "Cognition" and label[1] > 1
             ]
             cog_gx = gx.subgraph(comm[cog_comm[0]])
+            write_graph(cog_gx, output, f"cognition_globalres_{res:.1f}")
+
             # resolutions = [0.5, 0.6, 0.8, 0.9, 1.0,1.1,1.2]
             resolutions = np.arange(0.5, 1.5, 0.1)
 
@@ -569,7 +571,7 @@ def compute_community(
         elif not direct_citation and is_global_graph:
             filename = f"commonCitation_communities_{norm}_res_{res:.1f}_{N_clus}clusters_{cov:.3f}coverage_{metrics['modularity']:.3f}modularity.csv"
         elif not is_global_graph:
-            filename = f"cognition_{norm}_globalres_{global_res:.1f}_res_{res:.1f}_{N_clus}clusters_{cov:.3f}coverage_{metrics['modularity']:.3f}modularity.csv"
+            filename = f"cognition_{norm}_globalres_{global_res:.1f}_res_{res:.1f}_{N_clus}clusters_{cov:.3f}coverage_{metrics['modularity']:.3f}modularity_homogeneity_{homogeneity:.3f}_completeness_{completeness:.3f}.csv"
 
         if is_global_graph:
             metrics = get_subgraph_communities_pair(gx, comm, metrics, n_comm)
@@ -586,6 +588,7 @@ def compute_community(
                 # f"communities_res_{res:.1f}_{N_clus}clusters_{cov:.3f}coverage.csv",
             ),
             n_comm,
+            is_global_graph,
         )
 
     return comm
@@ -748,9 +751,43 @@ def get_subgraph_communities_pair(gx, comm, metrics, n_comm):
 
     # get 3 biggest communities
     pairs_idx = list(itertools.combinations(range(n_comm), 2))
+    boundaries = {}
     for i0, i1 in pairs_idx:
         # get subgraph induced by pair of communities
         comm0, comm1 = comm[i0], comm[i1]
+
+        # get mean dist from one comm to the other
+        comm1to0_distances = {}
+        comm0to1_distances = {}
+
+        boundary_1to0 = nx.node_boundary(
+            gx, comm0, comm1
+        )  # nodes in comm1 linked to comm0
+        boundary_0to1 = nx.node_boundary(
+            gx, comm1, comm0
+        )  # nodes in comm0 linked to comm1
+
+        for node0 in boundary_0to1:
+            for node1 in comm1:
+                node0_to_1_dist = len(nx.shortest_path(gx, node0, node1))
+                if node0 not in comm0to1_distances:
+                    comm0to1_distances[node0] = [node0_to_1_dist]
+                else:
+                    comm0to1_distances[node0].append(node0_to_1_dist)
+        for node1 in boundary_1to0:
+            for node0 in comm0:
+                node1_to_0_dist = len(nx.shortest_path(gx, node0, node1))
+                if node1 not in comm1to0_distances:
+                    comm1to0_distances[node1] = [node1_to_0_dist]
+                else:
+                    comm1to0_distances[node1].append(node1_to_0_dist)
+        # with open(f"comm{i0}_comm{i1}_distances", "w") as fout:
+        for node, dists in comm0to1_distances.items():
+            metrics[node][f"dist_to_comm_{i1}"] = np.mean(dists)
+            # fout.write(f"{node},comm_{i0},{np.mean(comm0to1_distances[node])}\n")
+        for node, dists in comm1to0_distances.items():
+            metrics[node][f"dist_to_comm_{i0}"] = np.mean(dists)
+
         comm_pair = comm0.union(comm1)
         sub_gx = gx.subgraph(comm_pair)
         sub_gx_dist = sub_gx.copy()
@@ -861,7 +898,9 @@ def print_community_homogeneity(gx, comm, doc2lab, covered_nodes, use_def):
     )
 
 
-def write_communities(comm, annot, comm_label, metrics, N_clus, name, n_comm):
+def write_communities(
+    comm, annot, comm_label, metrics, N_clus, name, n_comm, is_global_graph
+):
     """Write communities in csv file.
     Header is:
         file_ID, DOI, community, label
@@ -871,14 +910,15 @@ def write_communities(comm, annot, comm_label, metrics, N_clus, name, n_comm):
         pairs_idx = list(itertools.combinations(range(n_comm), 2))
         sub_comm_centr_header = ""
         for pair in pairs_idx:
-            sub_comm_centr_header += f"comm_{pair[0]}_{pair[1]}_centrality,comm_{pair[0]}_{pair[1]}_centrality_with_weights,"
+            sub_comm_centr_header += f"comm_{pair[0]}_{pair[1]}_centrality,comm_{pair[0]}_{pair[1]}_centrality_with_weights,dist_to_comm_{pair[0]},dist_to_comm_{pair[1]},"
 
         header = (
             "ID,DOI,community,Label,community_Label,"
             "is_covered,community_density,graph_density,local_clustering,"
             "degree,degree_in_community,centrality,centrality_in_community,weighted_centrality,weighted_centrality_in_community,"
         )
-        header += sub_comm_centr_header[:-1]  # don't include last ","
+        if is_global_graph:
+            header += sub_comm_centr_header[:-1]  # don't include last ","
         header += "\n"
         # fout.write(
         #    "ID,DOI,community,Label,community_Label,"
@@ -918,12 +958,21 @@ def write_communities(comm, annot, comm_label, metrics, N_clus, name, n_comm):
                         metrics[doc_id][
                             f"comm_{pair[0]}_{pair[1]}_centrality_weight"
                         ] = -1
+
+                    if f"dist_to_comm_{pair[0]}" not in metrics[doc_id]:
+                        metrics[doc_id][f"dist_to_comm_{pair[0]}"] = -1
+                    if f"dist_to_comm_{pair[1]}" not in metrics[doc_id]:
+                        metrics[doc_id][f"dist_to_comm_{pair[1]}"] = -1
+
                     # try:
                     _centr = metrics[doc_id][f"comm_{pair[0]}_{pair[1]}_centrality"]
                     _wcentr = metrics[doc_id][
                         f"comm_{pair[0]}_{pair[1]}_centrality_weight"
                     ]
-                    sub_comm_centr += f"{_centr},{_wcentr},"
+                    _dist0 = metrics[doc_id][f"dist_to_comm_{pair[0]}"]
+                    _dist1 = metrics[doc_id][f"dist_to_comm_{pair[1]}"]
+
+                    sub_comm_centr += f"{_centr},{_wcentr},{_dist0},{_dist1},"
 
                     # sub_comm_centr += (
                     #    f"{metrics[doc_id]['comm_{pair[0]}_{pair[1]}_centrality']},"
@@ -931,7 +980,8 @@ def write_communities(comm, annot, comm_label, metrics, N_clus, name, n_comm):
                     # except:
                     #    ipdb.set_trace()
                     #               metrics_out += sub_comm_centr[:-1]
-                metrics_out += sub_comm_centr[:-1]
+                if is_global_graph:
+                    metrics_out += sub_comm_centr[:-1]
                 metrics_out += "\n"
                 fout.write(metrics_out)
 
