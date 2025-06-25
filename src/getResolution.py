@@ -498,7 +498,7 @@ def compute_community(
                 if label[0] == "Cognition" and label[1] > 1
             ]
             cog_gx = gx.subgraph(comm[cog_comm[0]])
-            write_graph(cog_gx, output, f"cognition_globalres_{res:.1f}")
+            write_graph(cog_gx, output, f"cognition_globalres_{res:.1f}.csv")
 
             # resolutions = [0.5, 0.6, 0.8, 0.9, 1.0,1.1,1.2]
             resolutions = np.arange(0.5, 1.5, 0.1)
@@ -919,6 +919,8 @@ def write_communities(
         )
         if is_global_graph:
             header += sub_comm_centr_header[:-1]  # don't include last ","
+        else:
+            header = header[:-1]
         header += "\n"
         # fout.write(
         #    "ID,DOI,community,Label,community_Label,"
@@ -982,6 +984,8 @@ def write_communities(
                     #               metrics_out += sub_comm_centr[:-1]
                 if is_global_graph:
                     metrics_out += sub_comm_centr[:-1]
+                else:
+                    metrics_out = metrics_out[:-1]
                 metrics_out += "\n"
                 fout.write(metrics_out)
 
