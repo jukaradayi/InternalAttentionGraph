@@ -574,7 +574,7 @@ def compute_community(
             filename = f"cognition_{norm}_globalres_{global_res:.1f}_res_{res:.1f}_{N_clus}clusters_{cov:.3f}coverage_{metrics['modularity']:.3f}modularity_homogeneity_{homogeneity:.3f}_completeness_{completeness:.3f}.csv"
 
         if is_global_graph:
-            metrics = get_subgraph_communities_pair(gx, comm, metrics, n_comm)
+            metrics = get_subgraph_communities_pair(gx, comm, metrics, n_comm, output)
 
         write_communities(
             comm,
@@ -722,7 +722,7 @@ def majority_class_per_cluster(comm, doc2lab):
     return comm_label, doc2uniqLab
 
 
-def get_subgraph_communities_pair(gx, comm, metrics, n_comm):
+def get_subgraph_communities_pair(gx, comm, metrics, n_comm, output):
     """pick the n_comm biggest communities in the graph, for all pairs of those communities,
     get the subgraph induced by the nodes in the community pair, and compute the
     betweenness centrality for this subgraph.
@@ -790,6 +790,8 @@ def get_subgraph_communities_pair(gx, comm, metrics, n_comm):
 
         comm_pair = comm0.union(comm1)
         sub_gx = gx.subgraph(comm_pair)
+        write_graph(sub_gx, output, f"subgraph_comm{i0}_comm{i1}.csv")
+
         sub_gx_dist = sub_gx.copy()
         for e in sub_gx_dist.edges():
             e_as = sub_gx_dist[e[0]][e[1]]["weight"]
