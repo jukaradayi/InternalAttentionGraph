@@ -912,7 +912,7 @@ def write_communities(
         pairs_idx = list(itertools.combinations(range(n_comm), 2))
         sub_comm_centr_header = ""
         for pair in pairs_idx:
-            sub_comm_centr_header += f"comm_{pair[0]}_{pair[1]}_centrality,comm_{pair[0]}_{pair[1]}_centrality_with_weights,dist_to_comm_{pair[0]},dist_to_comm_{pair[1]},"
+            sub_comm_centr_header += f"comm_{pair[0]}_{pair[1]}_centrality,comm_{pair[0]}_{pair[1]}_centrality_with_weights,dist_from_comm_{pair[1]}_to_{pair[0]},dist_from_comm_{pair[0]}_to_{pair[1]},"
 
         header = (
             "ID,DOI,community,Label,community_Label,"
