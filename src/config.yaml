@@ -1,0 +1,27 @@
+# Configuration file for getResolution.py # git@github.com:jukaradayi/InternalAttentionGraph.git
+input_output:
+  dataset: "InternalAttention_25092024_FieldsandDef.csv"
+  separator: ',' # character used as a separator in the input csv file
+  output: "output" # name of the output folder
+graph:
+  ref2articles: True # set to True to write a mapping of the references to the articles referencing them
+  direct_citation: False # If True, link two articles if one cites the other, else link two articles if they have at least one common reference
+  write_graph: True # Enable to write the graph in a format readable by gephi
+  dump: False # Write the graph in a format readable by gephi 
+  load: null # load pickled graph object generated using --dump."
+  weight: "association" # choose the type of normalisation to use to compute the weights, choices are "association", "cosine", "inclusion", "jaccard", "no_norm"
+
+communities:
+  threshold_coverage: 0.9 # Set a threshold on the percentage of articles covered, to select the number of clusters. Mutually exclusive with threshold_cluster
+  threshold_cluster: null # Set a threshold on the number of clusters. Mutually exclusive with threshold_coverage
+  use_def: True # use the definitions as community labels to compute homogeneity and completeness metrics
+  girvanNewman: False # Use Girvan Newman algorithm to find partitions. If disabled, will be using greedy community detection
+  contingency: True # export the contingency matrix
+  greedy: # if not using girvan Newman algorithm, specify parameters used for the greedy commun
+    resolutionMin: 0.5 # Min resolution
+    resolutionMax: 1.5 # Resolution step
+    resolutionStep: 0.1 # resolution step
+verbose: True # increase verbosity
+
+
+

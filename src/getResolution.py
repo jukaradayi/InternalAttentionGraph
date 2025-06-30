@@ -1,6 +1,7 @@
 import os
 
 import ipdb
+import yaml
 import pickle
 import argparse
 import itertools
@@ -19,6 +20,30 @@ from sklearn.metrics.cluster import (
 
 # call Crossref
 cr = Crossref()
+
+
+def parse_config(config_path):
+    """Read input configuration for parameters
+
+    Parameter
+    ---------
+    config_path: str
+        path to the configuration file, in yaml format
+
+    Return
+    ------
+    config: dict
+        dictionnary with the parameter names as key, and param values as value.
+    """
+    with open(config_path, "r") as fin:
+        config = yaml.safe_load(fin)
+    if not args.weights:
+        raise RuntimeError(
+            "no weight defined. Please choose a normalisation using -w with one the "
+            "choices available"
+        )
+
+    return config
 
 
 def read_input_csv(
@@ -993,6 +1018,97 @@ def write_communities(
 
 
 def main():
+    parser = argparse.ArgumentParser(description="Study communities")
+
+    # input output arguments
+    parser.add_argument(
+        "-c",
+        "--config",
+        type=str,
+        help="path to the configuration file in yaml format",
+    )
+    args = parser.parse_args()
+    config = parse_config(args.config)
+
+    # declare variables for input parameters called multiple times
+    output = config["input_output"]["output"]
+    if not os.path.isdir(output):
+        os.mkdir(output)
+
+    # read input dataset and create common citation graph
+    annot, doc2lab, doi2node, annot_dict = read_input_csv(
+        csv_path=config["input_output"]["dataset"],
+        separator=config["input_output"]["separator"],
+    )
+
+    # don't generate graph if --load is used
+    if config["graph"]["load"] is None or config["graph"]["load"] == "":
+
+        if args.direct_citation:
+            graph_name = "directCitationGraph.csv"
+            gx = create_direct_citation_graph(
+                annot,
+                doc2lab,
+                doi2node,
+                config["graph"]["dump"],
+                output,
+                config["graph"]["ref2articles"],
+            )
+            # create_common_citation_graph(annot, doc2lab)
+        else:
+            graph_name = "commonCitationGraph.csv"
+            gx = create_common_citation_graph(
+                annot,
+                annot_dict,
+                doc2lab,
+                config["graph"]["dump"],
+                output,
+                config["graph"]["ref2articles"],
+                config["graph"]["weight"],
+            )
+
+        # when requested, write graph
+        if config["graph"]["write_graph"]:
+            write_graph(gx, output, graph_name)
+    else:
+        gx = load_graph(config["graph"]["load"])
+
+    # run community detection
+    if config['communities']['greedy']['resolutionMin'] == config['communities']['greedy']['resolutionMax']:
+        resolutions = [config['communities']['greedy']['resolutionMin']
+    else:
+        resolutions = np.arange(
+            config['communities']['greedy']['resolutionMin'],
+            config['communities']['greedy']['resolutionMax'],
+            config['communities']['greedy']['resolutionStep'],
+        )
+
+    if config['verbose']:
+        print(f"Running community detection for resolutions: {resolutions}")
+    compute_community(
+        gx,
+        resolutions,
+        args.contingency,
+        args.verbose,
+        args.output,
+        doc2lab,
+        annot_dict,
+        args.threshold_coverage,
+        args.threshold_cluster,
+        args.direct_citation,
+        args.use_def,
+        args.ncommunities,
+        args.weights,
+        True,
+        None,
+    )
+    # else:
+    #    k = 80 # can change k to change "resolution"
+    #    compute_girvanNewman(gx, k, args.contingency, args.verbose,
+    #                         args.output, doc2lab, annot_dict)
+
+
+def deprecated_main():
     """Main function"""
     #  parse arguments
     parser = argparse.ArgumentParser(description="k edge swap")
