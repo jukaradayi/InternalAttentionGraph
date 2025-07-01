@@ -1,4 +1,5 @@
 import os
+import shutil
 
 import ipdb
 import yaml
@@ -42,7 +43,9 @@ def parse_config(config_path):
             "no weight defined. Please choose a normalisation using -w with one the "
             "choices available"
         )
-
+    if config['communities']['threshold_coverage'] is not None and config['communities']['threshold_cluster'] :
+        raise RuntimeError("theshold_coverage and threshold_cluster are mutually"
+        "exclusive, please only set on, and set the other to null")
     return config
 
 
@@ -1035,6 +1038,8 @@ def main():
     if not os.path.isdir(output):
         os.mkdir(output)
 
+    # copy config file in output folder
+    shutil.copy(args.config, output)
     # read input dataset and create common citation graph
     annot, doc2lab, doi2node, annot_dict = read_input_csv(
         csv_path=config["input_output"]["dataset"],
@@ -1108,222 +1113,222 @@ def main():
     #                         args.output, doc2lab, annot_dict)
 
 
-def deprecated_main():
-    """Main function"""
-    #  parse arguments
-    parser = argparse.ArgumentParser(description="k edge swap")
-
-    # input output arguments
-    parser.add_argument(
-        "-f",
-        "--dataset",
-        type=str,
-        help="path to the input CSV",
-    )
-
-    parser.add_argument(
-        "-F",
-        "--separator",
-        type=str,
-        default=",",
-        help="field separator used in csv. Default to ,",
-    )
-
-    parser.add_argument(
-        "--ref2articles",
-        action="store_true",
-        help="Enable to write mapping of references to the articles referencing them",
-    )
-
-    parser.add_argument(
-        "-dc",
-        "--direct_citation",
-        action="store_true",
-        help="Specify -dc to use direct citation graph."
-        " If not specified, it uses the common citation graph.",
-    )
-
-    parser.add_argument(
-        "-o",
-        "--output",
-        type=str,
-        default=None,
-        help="path to the output folder. The folder will be created if it does not exists.",
-    )
-
-    parser.add_argument(
-        "--write_graph",
-        action="store_true",
-        help="write the graph in a format readable by gephi",
-    )
-
-    # options to dump/load networkx graph
-    pickle_group = parser.add_mutually_exclusive_group()
-
-    pickle_group.add_argument(
-        "--dump",
-        action="store_true",
-        help="write graph as pickle object to avoid running through crossref for future runs.",
-    )
-
-    pickle_group.add_argument(
-        "--load", default=None, help="load pickled graph object generated using --dump."
-    )
-
-    # options to put a threshold on the coverage
-    threshold_group = parser.add_mutually_exclusive_group()
-
-    threshold_group.add_argument(
-        "-tc",
-        "--threshold_coverage",
-        type=float,
-        default=None,
-        help="Set a threshold on the percentage of articles"
-        "covered, to select the number of clusters. Mutually exclusive with -tn.",
-    )
-
-    threshold_group.add_argument(
-        "-tn",
-        "--threshold_cluster",
-        type=int,
-        default=None,
-        help="Set a threshold on the number of clusters. Mutually exclusive with -tc",
-    )
-
-    # option to use the definitions as community labels
-    parser.add_argument(
-        "--use_def",
-        action="store_true",
-        help="use the definitions as community labels, to"
-        " compute homogeneity and completeness metrics",
-    )
-
-    # parser.add_argument('-g', '--girvanNewman', action="store_true",
-    #    help='Use Girvan Newman algorithm to find partitions.')
-
-    parser.add_argument(
-        "-c,", "--contingency", action="store_true", help="export contingency matrix"
-    )
-
-    # Community detection resolution steps
-    parser.add_argument(
-        "-rm",
-        "--resolutionMin",
-        default=0.5,
-        type=float,
-        help="min resolution for greedy modularity community detection",
-    )
-
-    parser.add_argument(
-        "-rM",
-        "--resolutionMax",
-        default=1.5,
-        type=float,
-        help="max resolution for greedy modularity community detection",
-    )
-
-    parser.add_argument(
-        "-rS",
-        "--resolutionStep",
-        default=0.1,
-        type=float,
-        help="resolution step for greedy modularity community detection",
-    )
-
-    parser.add_argument(
-        "-nc",
-        "--ncommunities",
-        default=0,
-        type=int,
-        help="number of biggest communities to use when studying"
-        "subgraphs of pairs of communities",
-    )
-
-    parser.add_argument(
-        "-w",
-        "--weights",
-        choices=["association", "cosine", "inclusion", "jaccard", "no_norm"],
-        type=str,
-        help="choose the type of normalisation to use to compute the weights",
-    )
-
-    parser.add_argument(
-        "-v", "--verbose", action="store_true", help="increase verbosity"
-    )
-
-    args = parser.parse_args()
-
-    if not os.path.isdir(args.output):
-        os.mkdir(args.output)
-
-    # read input dataset and create common citation graph
-    annot, doc2lab, doi2node, annot_dict = read_input_csv(
-        csv_path=args.dataset, separator=args.separator
-    )
-
-    # don't generate graph if --load is used
-    if args.load is None:
-
-        if args.direct_citation:
-            graph_name = "directCitationGraph.csv"
-            gx = create_direct_citation_graph(
-                annot, doc2lab, doi2node, args.dump, args.output, args.ref2articles
-            )
-            # create_common_citation_graph(annot, doc2lab)
-        else:
-            graph_name = "commonCitationGraph.csv"
-            gx = create_common_citation_graph(
-                annot,
-                annot_dict,
-                doc2lab,
-                args.dump,
-                args.output,
-                args.ref2articles,
-                args.weights,
-            )
-
-        # when requested, write graph
-        if args.write_graph:
-            write_graph(gx, args.output, graph_name)
-    else:
-        gx = load_graph(args.load)
-
-    # run community detection
-    if args.resolutionMin == args.resolutionMax:
-        resolutions = [args.resolutionMin]
-    else:
-        resolutions = np.arange(
-            args.resolutionMin, args.resolutionMax, args.resolutionStep
-        )
-
-    if args.verbose:
-        print(f"Running community detection for resolutions: {resolutions}")
-    if not args.weights:
-        raise RuntimeError(
-            "no weight defined. Please choose a normalisation using -w with one the "
-            "choices available"
-        )
-    compute_community(
-        gx,
-        resolutions,
-        args.contingency,
-        args.verbose,
-        args.output,
-        doc2lab,
-        annot_dict,
-        args.threshold_coverage,
-        args.threshold_cluster,
-        args.direct_citation,
-        args.use_def,
-        args.ncommunities,
-        args.weights,
-        True,
-        None,
-    )
-    # else:
-    #    k = 80 # can change k to change "resolution"
-    #    compute_girvanNewman(gx, k, args.contingency, args.verbose,
-    #                         args.output, doc2lab, annot_dict)
+#def deprecated_main():
+#    """Main function"""
+#    #  parse arguments
+#    parser = argparse.ArgumentParser(description="k edge swap")
+#
+#    # input output arguments
+#    parser.add_argument(
+#        "-f",
+#        "--dataset",
+#        type=str,
+#        help="path to the input CSV",
+#    )
+#
+#    parser.add_argument(
+#        "-F",
+#        "--separator",
+#        type=str,
+#        default=",",
+#        help="field separator used in csv. Default to ,",
+#    )
+#
+#    parser.add_argument(
+#        "--ref2articles",
+#        action="store_true",
+#        help="Enable to write mapping of references to the articles referencing them",
+#    )
+#
+#    parser.add_argument(
+#        "-dc",
+#        "--direct_citation",
+#        action="store_true",
+#        help="Specify -dc to use direct citation graph."
+#        " If not specified, it uses the common citation graph.",
+#    )
+#
+#    parser.add_argument(
+#        "-o",
+#        "--output",
+#        type=str,
+#        default=None,
+#        help="path to the output folder. The folder will be created if it does not exists.",
+#    )
+#
+#    parser.add_argument(
+#        "--write_graph",
+#        action="store_true",
+#        help="write the graph in a format readable by gephi",
+#    )
+#
+#    # options to dump/load networkx graph
+#    pickle_group = parser.add_mutually_exclusive_group()
+#
+#    pickle_group.add_argument(
+#        "--dump",
+#        action="store_true",
+#        help="write graph as pickle object to avoid running through crossref for future runs.",
+#    )
+#
+#    pickle_group.add_argument(
+#        "--load", default=None, help="load pickled graph object generated using --dump."
+#    )
+#
+#    # options to put a threshold on the coverage
+#    threshold_group = parser.add_mutually_exclusive_group()
+#
+#    threshold_group.add_argument(
+#        "-tc",
+#        "--threshold_coverage",
+#        type=float,
+#        default=None,
+#        help="Set a threshold on the percentage of articles"
+#        "covered, to select the number of clusters. Mutually exclusive with -tn.",
+#    )
+#
+#    threshold_group.add_argument(
+#        "-tn",
+#        "--threshold_cluster",
+#        type=int,
+#        default=None,
+#        help="Set a threshold on the number of clusters. Mutually exclusive with -tc",
+#    )
+#
+#    # option to use the definitions as community labels
+#    parser.add_argument(
+#        "--use_def",
+#        action="store_true",
+#        help="use the definitions as community labels, to"
+#        " compute homogeneity and completeness metrics",
+#    )
+#
+#    # parser.add_argument('-g', '--girvanNewman', action="store_true",
+#    #    help='Use Girvan Newman algorithm to find partitions.')
+#
+#    parser.add_argument(
+#        "-c,", "--contingency", action="store_true", help="export contingency matrix"
+#    )
+#
+#    # Community detection resolution steps
+#    parser.add_argument(
+#        "-rm",
+#        "--resolutionMin",
+#        default=0.5,
+#        type=float,
+#        help="min resolution for greedy modularity community detection",
+#    )
+#
+#    parser.add_argument(
+#        "-rM",
+#        "--resolutionMax",
+#        default=1.5,
+#        type=float,
+#        help="max resolution for greedy modularity community detection",
+#    )
+#
+#    parser.add_argument(
+#        "-rS",
+#        "--resolutionStep",
+#        default=0.1,
+#        type=float,
+#        help="resolution step for greedy modularity community detection",
+#    )
+#
+#    parser.add_argument(
+#        "-nc",
+#        "--ncommunities",
+#        default=0,
+#        type=int,
+#        help="number of biggest communities to use when studying"
+#        "subgraphs of pairs of communities",
+#    )
+#
+#    parser.add_argument(
+#        "-w",
+#        "--weights",
+#        choices=["association", "cosine", "inclusion", "jaccard", "no_norm"],
+#        type=str,
+#        help="choose the type of normalisation to use to compute the weights",
+#    )
+#
+#    parser.add_argument(
+#        "-v", "--verbose", action="store_true", help="increase verbosity"
+#    )
+#
+#    args = parser.parse_args()
+#
+#    if not os.path.isdir(args.output):
+#        os.mkdir(args.output)
+#
+#    # read input dataset and create common citation graph
+#    annot, doc2lab, doi2node, annot_dict = read_input_csv(
+#        csv_path=args.dataset, separator=args.separator
+#    )
+#
+#    # don't generate graph if --load is used
+#    if args.load is None:
+#
+#        if args.direct_citation:
+#            graph_name = "directCitationGraph.csv"
+#            gx = create_direct_citation_graph(
+#                annot, doc2lab, doi2node, args.dump, args.output, args.ref2articles
+#            )
+#            # create_common_citation_graph(annot, doc2lab)
+#        else:
+#            graph_name = "commonCitationGraph.csv"
+#            gx = create_common_citation_graph(
+#                annot,
+#                annot_dict,
+#                doc2lab,
+#                args.dump,
+#                args.output,
+#                args.ref2articles,
+#                args.weights,
+#            )
+#
+#        # when requested, write graph
+#        if args.write_graph:
+#            write_graph(gx, args.output, graph_name)
+#    else:
+#        gx = load_graph(args.load)
+#
+#    # run community detection
+#    if args.resolutionMin == args.resolutionMax:
+#        resolutions = [args.resolutionMin]
+#    else:
+#        resolutions = np.arange(
+#            args.resolutionMin, args.resolutionMax, args.resolutionStep
+#        )
+#
+#    if args.verbose:
+#        print(f"Running community detection for resolutions: {resolutions}")
+#    if not args.weights:
+#        raise RuntimeError(
+#            "no weight defined. Please choose a normalisation using -w with one the "
+#            "choices available"
+#        )
+#    compute_community(
+#        gx,
+#        resolutions,
+#        args.contingency,
+#        args.verbose,
+#        args.output,
+#        doc2lab,
+#        annot_dict,
+#        args.threshold_coverage,
+#        args.threshold_cluster,
+#        args.direct_citation,
+#        args.use_def,
+#        args.ncommunities,
+#        args.weights,
+#        True,
+#        None,
+#    )
+#    # else:
+#    #    k = 80 # can change k to change "resolution"
+#    #    compute_girvanNewman(gx, k, args.contingency, args.verbose,
+#    #                         args.output, doc2lab, annot_dict)
 
 
 if __name__ == "__main__":
