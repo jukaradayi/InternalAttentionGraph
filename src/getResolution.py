@@ -38,14 +38,58 @@ def parse_config(config_path):
     """
     with open(config_path, "r") as fin:
         config = yaml.safe_load(fin)
+
+    ## check config values
+    # check weight
     if config['graph']['weight'] not in ["association", "cosine", "inclusion", "jaccard", "no_norm"]:
         raise RuntimeError(
             "no weight defined. Please choose a normalisation using -w with one the "
             "choices available"
         )
+    
+    # check mutual exclusivity for thresholds
     if config['communities']['threshold_coverage'] is not None and config['communities']['threshold_cluster'] :
         raise RuntimeError("theshold_coverage and threshold_cluster are mutually"
         "exclusive, please only set on, and set the other to null")
+    
+    # check booleans
+    if not isinstance(config['graph']['ref2articles'] , bool):
+        raise RuntimeError(f"ref2articles argument should be True "
+                            "or False, not {config['graph']['ref2articles']}")
+    if not isinstance(config['graph']['write_graph'] , bool):
+        raise RuntimeError(f"write_graph argument should be True "
+                            "or False, not {config['graph']['write_graph']}")
+    if not isinstance(config['graph']['dump'] , bool):
+        raise RuntimeError(f"dump argument should be True "
+                            "or False, not {config['graph']['dump']}")
+    if not isinstance(config['communities']['use_def'] , bool):
+        raise RuntimeError(f"use_def argument should be True "
+                            "or False, not {config['communities']['use_def']}")
+    #if not isinstance(config['communities']['girvanNewman'] , bool):
+    #    raise RuntimeError(f"girvanNewman argument should be True "
+    #                        "or False, not {config['communities']['girvanNewman']}")
+    if not isinstance(config['communities']['contingency'] , bool):
+        raise RuntimeError(f"contingency argument should be True "
+                            "or False, not {config['communities']['contingency']}")
+    if not isinstance(config['verbose'] , bool):
+        raise RuntimeError(f"verbose argument should be True "
+                            "or False, not {config['verbose']}")
+
+    # create output folder if it doesn't exist
+    if not os.path.isdir(config['input_output']['output']):
+        os.mkdir(config['input_output']['output'])
+
+    # check resolution
+    if not (isinstance(config['communities']['greedy']['resolutionMax'], float) 
+            and isinstance(config['communities']['greedy']['resolutionMin'], float)) :
+        raise RuntimeError(f"resolutionMin and Max should be floats")
+
+    if (config['communities']['greedy']['resolutionMax'] < config['communities']['greedy']['resolutionMin']) :
+        raise RuntimeError(f"resolutionMin should be less or equal to resolutionMax")
+   
+    # copy config file in output folder
+    shutil.copy(config_path, config['input_output']['output'])
+
     return config
 
 
@@ -79,30 +123,55 @@ def read_input_csv(
         keys are doc_id, values are (DOI, label1, label2, label3)
 
     """
+    def parse_header(header, separator):
+        """ Parse header to find position of the following columns:
+            ID,  DOI, Final_Field1, Final_Field2, Final_Field3, Final_definition
+        """
+        col_names = header.strip().split(separator)
+        id_pos = col_names.index('ID')
+        doi_pos = col_names.index('DOI')
+        field1_pos = col_names.index('Final_Field1')
+        field2_pos = col_names.index('Final_Field2')
+        field3_pos = col_names.index('Final_Field3')
+        def_pos = col_names.index('Final_definition')
+        return (id_pos, doi_pos, field1_pos, field2_pos, field3_pos, def_pos)
 
     annot = []  # store document info as tuple
     annot_dict = {}
     doc2lab = {}  # doc_id: label
-    # doc2doi = {}
     doi2node = {}
-    # all_labs = set()
 
     # parse CSV
     with open(csv_path, "r") as fin:
         for line_idx, line in enumerate(fin):
 
+            # parse header and get position of each column
             if line_idx == 0:
+                (id_pos,
+                 doi_pos,
+                 field1_pos,
+                 field2_pos,
+                 field3_pos,
+                 def_pos) = parse_header(line, separator) 
+
                 continue  # skip header
 
-            (doc_id, DOI, label1, label2, label3, definition) = line.strip().split(
+            # parse line and get each value
+            col_values = line.strip().split(
                 separator
-            )  # TODO get columns from header ?
+            ) 
+            doc_id = col_values[id_pos]
+            DOI = col_values[doi_pos]
+            label1 = col_values[field1_pos]
+            label2 = col_values[field2_pos]
+            label3 = col_values[field3_pos]
+            definition = col_values[def_pos]
 
             # concatenate labels
             if label2 == label1:
                 # remove duplicates - there should be only 3 cases
                 label2 = ""
-            labels = (label1, label2, label3, definition)  # TODO list of tuples?
+            labels = (label1, label2, label3, definition) 
             # labels = [label1]
 
             # concatenate labels
@@ -111,7 +180,6 @@ def read_input_csv(
             # node_label = [lab for lab in labels if len(lab) > 0 ]
 
             doc2lab[int(doc_id)] = node_label
-            # doc2doi[int(doc_id)] = DOI
             doi2node[DOI] = int(doc_id)
 
             # TODO not necessary..?
@@ -1035,11 +1103,9 @@ def main():
 
     # declare variables for input parameters called multiple times
     output = config["input_output"]["output"]
-    if not os.path.isdir(output):
-        os.mkdir(output)
+    #if not os.path.isdir(output):
+    #    os.mkdir(output)
 
-    # copy config file in output folder
-    shutil.copy(args.config, output)
     # read input dataset and create common citation graph
     annot, doc2lab, doi2node, annot_dict = read_input_csv(
         csv_path=config["input_output"]["dataset"],
