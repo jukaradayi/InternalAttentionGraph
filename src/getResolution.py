@@ -167,17 +167,17 @@ def read_input_csv(
             label3 = col_values[field3_pos]
             definition = col_values[def_pos]
 
-            # concatenate labels
+            # get labels
             if label2 == label1:
                 # remove duplicates - there should be only 3 cases
                 label2 = ""
             labels = (label1, label2, label3, definition) 
-            # labels = [label1]
-
-            # concatenate labels
+            # labels = [label1] # other option is to only keep the first label
+            # third option is to concatenate labels
             # node_label = "_".join(sorted(list({lab for lab in labels if len(lab) > 0})))
-            node_label = labels
             # node_label = [lab for lab in labels if len(lab) > 0 ]
+
+            node_label = labels
 
             doc2lab[int(doc_id)] = node_label
             doi2node[DOI] = int(doc_id)
@@ -239,11 +239,11 @@ def create_direct_citation_graph(
     # for each reference , store ids of articles
     ref2article = defaultdict(list)
 
-    # store number of fails using crossRef
+    # store number of fails using crossRef for debugging purposes
     fails = []
     succ = []
     failref = []
-    failbis = []
+    faildoilist = []
 
     # Build direct citation graph
     # for each doi, check if it's accessible through crossref,
@@ -268,7 +268,7 @@ def create_direct_citation_graph(
                         failref.append((DOI, ref))
                     elif ref["DOI"] not in doi_set:
                         ref2article[ref["DOI"]].append(doc_id)
-                        failbis.append((DOI, ref["DOI"]))
+                        faildoilist.append((DOI, ref["DOI"]))
             succ.append(DOI)
 
         except HTTPError:
@@ -327,7 +327,7 @@ def create_common_citation_graph(
     gx = nx.Graph()
     gx.add_nodes_from(doc2lab)
 
-    # store number of fails using crossRef # TODO remove ?
+    # store number of fails using crossRef for debugging purposes 
     fails = []
     succ = []
 
@@ -368,10 +368,7 @@ def create_common_citation_graph(
             n_refs_u = len(doi2ref[doi_u])  # size of u's biblio
             n_refs_v = len(doi2ref[doi_v])  # size of v's biblio
 
-            # TODO add other measures for weights
-            # TODO : add in output file name of measures used
             # list measures :
-            # association strengh (6)
             weight_meas = {
                 "association": len(common_ref) / (n_refs_u * n_refs_v),
                 "cosine": len(common_ref) / np.sqrt(n_refs_u * n_refs_v),
@@ -379,12 +376,7 @@ def create_common_citation_graph(
                 "jaccard": len(common_ref) / (n_refs_u + n_refs_v - len(common_ref)),
                 "no_norm": len(common_ref),
             }
-            # assoc_str_w = len(common_ref) / (n_refs_u * n_refs_v)
 
-            ## cosine (7)
-            # cosine = len(common_ref) / np.sqrt(n_refs_u * n_refs_v)
-            ## inclusion (8)
-            ## jaccard (9)
             assert (n_refs_u + n_refs_v - len(common_ref)) == len(
                 doi2ref[doi_u].union(doi2ref[doi_v])
             ), "bug in biblio union size "
@@ -550,9 +542,10 @@ def compute_community(
             cov = 1.0
         covered_nodes = [u for C in comm[:N_clus] for u in C]
 
-        # covered_nodes = [u for C in comm[:N_clus] for u in C]
+        # get majority label and map each article in the community to this label 
         comm_label, doc2uniqLab = majority_class_per_cluster(comm, doc2lab)
 
+        ## compute homogeneity and completeness for "cognition" graph
         # With 1 label per document, compute homogeneity and completeness
         if not is_global_graph:
             use_def = True
@@ -568,6 +561,7 @@ def compute_community(
         homogeneity = homogeneity_score(y_true, y_pred)
         completeness = completeness_score(y_true, y_pred)
 
+        # compute contingency matrix on global graph
         if is_global_graph:
             contingency = contingency_matrix(y_true, y_pred)
             if cov_thresh is None and clus_thresh is None:
@@ -586,7 +580,8 @@ def compute_community(
 
         # ari = adjusted_rand_score(y_true, y_pred)
 
-        # study cognition
+        # study cognition community subgraph and compute
+        # community detection on it
         if is_global_graph:
             cog_comm = [
                 _comm
@@ -596,6 +591,7 @@ def compute_community(
             cog_gx = gx.subgraph(comm[cog_comm[0]])
             write_graph(cog_gx, output, f"cognition_globalres_{res:.1f}.csv")
 
+            # hard code resolutions
             # resolutions = [0.5, 0.6, 0.8, 0.9, 1.0,1.1,1.2]
             resolutions = np.arange(0.5, 1.5, 0.1)
 
@@ -621,6 +617,8 @@ def compute_community(
         metrics = compute_metrics(gx, comm, res)
 
         if write_contingency and is_global_graph:
+
+            # get names of rows and columns of contingency matrix
             header_true = np.unique(y_true, return_inverse=True)
             header_pred = np.unique(y_pred, return_inverse=True)
             with open(
@@ -631,8 +629,10 @@ def compute_community(
                 ),
                 "w",
             ) as fout:
+                # write column names
                 fout.write("x," + ",".join([str(v) for v in header_pred[0]]) + "\n")
                 for row_idx, row in enumerate(contingency):
+                    # write row names, then row
                     fout.write(
                         header_true[0][row_idx]
                         + ","
@@ -640,6 +640,7 @@ def compute_community(
                         + "\n"
                     )
 
+            # write contingency matrix for covered articles only
             header_true = np.unique(y_true_covered, return_inverse=True)
             header_pred = np.unique(y_pred_covered, return_inverse=True)
             with open(
@@ -669,9 +670,12 @@ def compute_community(
         elif not is_global_graph:
             filename = f"cognition_{norm}_globalres_{global_res:.1f}_res_{res:.1f}_{N_clus}clusters_{cov:.3f}coverage_{metrics['modularity']:.3f}modularity_homogeneity_{homogeneity:.3f}_completeness_{completeness:.3f}.csv"
 
+        # for the n_comm biggest communities, get the subgraph of nodes from these
+        # two communities and compute metrics in this subgraph
         if is_global_graph:
             metrics = get_subgraph_communities_pair(gx, comm, metrics, n_comm, output)
 
+        # write all metrics in output file
         write_communities(
             comm,
             annot,
@@ -781,8 +785,7 @@ def majority_class_per_cluster(comm, doc2lab):
     doc2uniqLab = {}
     purities = []
 
-    # loop through communities, for each community "flatten" the labels
-    # and count the one occuring the most
+    # loop through communities, for each community count the label occuring the most
     for comm_idx, c in enumerate(comm):
         comm_labels = [label for doc in c for label in doc2lab[doc] if label != ""]
         # comcom_labels = [doc2lab[doc] for doc in c]
@@ -879,10 +882,10 @@ def get_subgraph_communities_pair(gx, comm, metrics, n_comm, output):
                     comm1to0_distances[node1].append(node1_to_0_dist)
         # with open(f"comm{i0}_comm{i1}_distances", "w") as fout:
         for node, dists in comm0to1_distances.items():
-            metrics[node][f"dist_to_comm_{i1}"] = np.mean(dists)
+            metrics[node][f"dist_from_comm_{i0}_to_{i1}"] = np.mean(dists)
             # fout.write(f"{node},comm_{i0},{np.mean(comm0to1_distances[node])}\n")
         for node, dists in comm1to0_distances.items():
-            metrics[node][f"dist_to_comm_{i0}"] = np.mean(dists)
+            metrics[node][f"dist_from_comm_{i1}_to_{i0}"] = np.mean(dists)
 
         comm_pair = comm0.union(comm1)
         sub_gx = gx.subgraph(comm_pair)
@@ -1059,18 +1062,18 @@ def write_communities(
                             f"comm_{pair[0]}_{pair[1]}_centrality_weight"
                         ] = -1
 
-                    if f"dist_to_comm_{pair[0]}" not in metrics[doc_id]:
-                        metrics[doc_id][f"dist_to_comm_{pair[0]}"] = -1
-                    if f"dist_to_comm_{pair[1]}" not in metrics[doc_id]:
-                        metrics[doc_id][f"dist_to_comm_{pair[1]}"] = -1
+                    if f"dist_from_comm_{pair[1]}_to_{pair[0]}" not in metrics[doc_id]:
+                        metrics[doc_id][f"dist_from_comm_{pair[1]}_to_{pair[0]}"] = -1
+                    if f"dist_from_comm_{pair[0]}_to_{pair[1]}" not in metrics[doc_id]:
+                        metrics[doc_id][f"dist_from_comm_{pair[0]}_to_{pair[1]}"] = -1
 
                     # try:
                     _centr = metrics[doc_id][f"comm_{pair[0]}_{pair[1]}_centrality"]
                     _wcentr = metrics[doc_id][
                         f"comm_{pair[0]}_{pair[1]}_centrality_weight"
                     ]
-                    _dist0 = metrics[doc_id][f"dist_to_comm_{pair[0]}"]
-                    _dist1 = metrics[doc_id][f"dist_to_comm_{pair[1]}"]
+                    _dist0 = metrics[doc_id][f"dist_from_comm_{pair[1]}_to_{pair[0]}"]
+                    _dist1 = metrics[doc_id][f"dist_from_comm_{pair[0]}_to_{pair[1]}"]
 
                     sub_comm_centr += f"{_centr},{_wcentr},{_dist0},{_dist1},"
 
@@ -1173,228 +1176,6 @@ def main():
         True,
         None,
     )
-    # else:
-    #    k = 80 # can change k to change "resolution"
-    #    compute_girvanNewman(gx, k, args.contingency, args.verbose,
-    #                         args.output, doc2lab, annot_dict)
-
-
-#def deprecated_main():
-#    """Main function"""
-#    #  parse arguments
-#    parser = argparse.ArgumentParser(description="k edge swap")
-#
-#    # input output arguments
-#    parser.add_argument(
-#        "-f",
-#        "--dataset",
-#        type=str,
-#        help="path to the input CSV",
-#    )
-#
-#    parser.add_argument(
-#        "-F",
-#        "--separator",
-#        type=str,
-#        default=",",
-#        help="field separator used in csv. Default to ,",
-#    )
-#
-#    parser.add_argument(
-#        "--ref2articles",
-#        action="store_true",
-#        help="Enable to write mapping of references to the articles referencing them",
-#    )
-#
-#    parser.add_argument(
-#        "-dc",
-#        "--direct_citation",
-#        action="store_true",
-#        help="Specify -dc to use direct citation graph."
-#        " If not specified, it uses the common citation graph.",
-#    )
-#
-#    parser.add_argument(
-#        "-o",
-#        "--output",
-#        type=str,
-#        default=None,
-#        help="path to the output folder. The folder will be created if it does not exists.",
-#    )
-#
-#    parser.add_argument(
-#        "--write_graph",
-#        action="store_true",
-#        help="write the graph in a format readable by gephi",
-#    )
-#
-#    # options to dump/load networkx graph
-#    pickle_group = parser.add_mutually_exclusive_group()
-#
-#    pickle_group.add_argument(
-#        "--dump",
-#        action="store_true",
-#        help="write graph as pickle object to avoid running through crossref for future runs.",
-#    )
-#
-#    pickle_group.add_argument(
-#        "--load", default=None, help="load pickled graph object generated using --dump."
-#    )
-#
-#    # options to put a threshold on the coverage
-#    threshold_group = parser.add_mutually_exclusive_group()
-#
-#    threshold_group.add_argument(
-#        "-tc",
-#        "--threshold_coverage",
-#        type=float,
-#        default=None,
-#        help="Set a threshold on the percentage of articles"
-#        "covered, to select the number of clusters. Mutually exclusive with -tn.",
-#    )
-#
-#    threshold_group.add_argument(
-#        "-tn",
-#        "--threshold_cluster",
-#        type=int,
-#        default=None,
-#        help="Set a threshold on the number of clusters. Mutually exclusive with -tc",
-#    )
-#
-#    # option to use the definitions as community labels
-#    parser.add_argument(
-#        "--use_def",
-#        action="store_true",
-#        help="use the definitions as community labels, to"
-#        " compute homogeneity and completeness metrics",
-#    )
-#
-#    # parser.add_argument('-g', '--girvanNewman', action="store_true",
-#    #    help='Use Girvan Newman algorithm to find partitions.')
-#
-#    parser.add_argument(
-#        "-c,", "--contingency", action="store_true", help="export contingency matrix"
-#    )
-#
-#    # Community detection resolution steps
-#    parser.add_argument(
-#        "-rm",
-#        "--resolutionMin",
-#        default=0.5,
-#        type=float,
-#        help="min resolution for greedy modularity community detection",
-#    )
-#
-#    parser.add_argument(
-#        "-rM",
-#        "--resolutionMax",
-#        default=1.5,
-#        type=float,
-#        help="max resolution for greedy modularity community detection",
-#    )
-#
-#    parser.add_argument(
-#        "-rS",
-#        "--resolutionStep",
-#        default=0.1,
-#        type=float,
-#        help="resolution step for greedy modularity community detection",
-#    )
-#
-#    parser.add_argument(
-#        "-nc",
-#        "--ncommunities",
-#        default=0,
-#        type=int,
-#        help="number of biggest communities to use when studying"
-#        "subgraphs of pairs of communities",
-#    )
-#
-#    parser.add_argument(
-#        "-w",
-#        "--weights",
-#        choices=["association", "cosine", "inclusion", "jaccard", "no_norm"],
-#        type=str,
-#        help="choose the type of normalisation to use to compute the weights",
-#    )
-#
-#    parser.add_argument(
-#        "-v", "--verbose", action="store_true", help="increase verbosity"
-#    )
-#
-#    args = parser.parse_args()
-#
-#    if not os.path.isdir(args.output):
-#        os.mkdir(args.output)
-#
-#    # read input dataset and create common citation graph
-#    annot, doc2lab, doi2node, annot_dict = read_input_csv(
-#        csv_path=args.dataset, separator=args.separator
-#    )
-#
-#    # don't generate graph if --load is used
-#    if args.load is None:
-#
-#        if args.direct_citation:
-#            graph_name = "directCitationGraph.csv"
-#            gx = create_direct_citation_graph(
-#                annot, doc2lab, doi2node, args.dump, args.output, args.ref2articles
-#            )
-#            # create_common_citation_graph(annot, doc2lab)
-#        else:
-#            graph_name = "commonCitationGraph.csv"
-#            gx = create_common_citation_graph(
-#                annot,
-#                annot_dict,
-#                doc2lab,
-#                args.dump,
-#                args.output,
-#                args.ref2articles,
-#                args.weights,
-#            )
-#
-#        # when requested, write graph
-#        if args.write_graph:
-#            write_graph(gx, args.output, graph_name)
-#    else:
-#        gx = load_graph(args.load)
-#
-#    # run community detection
-#    if args.resolutionMin == args.resolutionMax:
-#        resolutions = [args.resolutionMin]
-#    else:
-#        resolutions = np.arange(
-#            args.resolutionMin, args.resolutionMax, args.resolutionStep
-#        )
-#
-#    if args.verbose:
-#        print(f"Running community detection for resolutions: {resolutions}")
-#    if not args.weights:
-#        raise RuntimeError(
-#            "no weight defined. Please choose a normalisation using -w with one the "
-#            "choices available"
-#        )
-#    compute_community(
-#        gx,
-#        resolutions,
-#        args.contingency,
-#        args.verbose,
-#        args.output,
-#        doc2lab,
-#        annot_dict,
-#        args.threshold_coverage,
-#        args.threshold_cluster,
-#        args.direct_citation,
-#        args.use_def,
-#        args.ncommunities,
-#        args.weights,
-#        True,
-#        None,
-#    )
-#    # else:
-#    #    k = 80 # can change k to change "resolution"
-#    #    compute_girvanNewman(gx, k, args.contingency, args.verbose,
-#    #                         args.output, doc2lab, annot_dict)
 
 
 if __name__ == "__main__":
