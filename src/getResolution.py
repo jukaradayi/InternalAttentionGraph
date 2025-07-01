@@ -37,7 +37,7 @@ def parse_config(config_path):
     """
     with open(config_path, "r") as fin:
         config = yaml.safe_load(fin)
-    if not args.weights:
+    if config['graph']['weight'] not in ["association", "cosine", "inclusion", "jaccard", "no_norm"]:
         raise RuntimeError(
             "no weight defined. Please choose a normalisation using -w with one the "
             "choices available"
@@ -1044,7 +1044,7 @@ def main():
     # don't generate graph if --load is used
     if config["graph"]["load"] is None or config["graph"]["load"] == "":
 
-        if args.direct_citation:
+        if config['graph']['direct_citation']:
             graph_name = "directCitationGraph.csv"
             gx = create_direct_citation_graph(
                 annot,
@@ -1075,7 +1075,7 @@ def main():
 
     # run community detection
     if config['communities']['greedy']['resolutionMin'] == config['communities']['greedy']['resolutionMax']:
-        resolutions = [config['communities']['greedy']['resolutionMin']
+        resolutions = [config['communities']['greedy']['resolutionMin']]
     else:
         resolutions = np.arange(
             config['communities']['greedy']['resolutionMin'],
@@ -1088,17 +1088,17 @@ def main():
     compute_community(
         gx,
         resolutions,
-        args.contingency,
-        args.verbose,
-        args.output,
+        config['communities']['contingency'],
+        config['verbose'],
+        output,
         doc2lab,
         annot_dict,
-        args.threshold_coverage,
-        args.threshold_cluster,
-        args.direct_citation,
-        args.use_def,
-        args.ncommunities,
-        args.weights,
+        config['communities']['threshold_coverage'],
+        config['communities']['threshold_cluster'],
+        config['graph']['direct_citation'],
+        config['communities']['use_def'],
+        config['communities']['ncommunities'],
+        config['graph']['weight'],
         True,
         None,
     )
