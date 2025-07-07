@@ -270,7 +270,7 @@ def create_bibliographic_coupling_graph(
                 date = f"{_date[1]}/{_date[0]}"
             else:
                 date = f"{_date[0]}"
-            doc2attr[doc_id] = {"date": date, "doi": DOI}
+            doc2attr[doc_id] = {"date": date, "DOI": DOI}
 
             doi2ref[doc_id] = {ref["DOI"] for ref in references if "DOI" in ref}
             for ref in references:
@@ -330,8 +330,8 @@ def create_bibliographic_coupling_graph(
     with open(os.path.join(output, "common_ref_distrib.csv"), "w") as fout:
         fout.write("ID_u,ID_v,DOI_u,DOI_v,number_common_ref\n")
         for e in gx.edges():
-            _, DOI_u = doc2attr[e[0]]
-            _, DOI_v = doc2attr[e[1]]
+            DOI_u = doc2attr[e[0]]["DOI"]
+            DOI_v = doc2attr[e[1]]["DOI"]
 
             # DOI_u, _, _, _ = annot_dict[e[0]]
             # DOI_v, _, _, _ = annot_dict[e[1]]
@@ -342,17 +342,11 @@ def create_bibliographic_coupling_graph(
     if dump:
         dump_graph(gx, os.path.join(output, "common_citation.pickle"))
 
-    return gx
+    return gx, doc2attr
 
 
 def compute_communities(
-    gx,
-    resolutions,
-    verbose,
-    output,
-    doc2lab,
-    n_comm,
-    norm,
+    gx, resolutions, verbose, output, doc2lab, n_comm, norm, doc2attr
 ):
     """Compute Greedy Modularity Communities
     Parameter
@@ -406,7 +400,7 @@ def compute_communities(
 
         # export community list
         filename = f"bibliographicCoupling_norm_{norm}_res_{res:.1f}.csv"
-        filename_graph = f"bibliographicCoupling__graphMetrics_res_{res:.1f}.csv"
+        filename_graph = f"bibliographicCoupling_graphMetrics_res_{res:.1f}.csv"
 
         # write all metrics in output file
         write_communities(
@@ -424,6 +418,7 @@ def compute_communities(
             ),
             n_comm,
             doc2lab,
+            doc2attr,
         )
 
     return comm
@@ -520,7 +515,7 @@ def get_subgraph_communities_pair(gx, comm, metrics, n_comm, output):
 
 
 def write_communities(
-    comm, metrics, graph_metrics, filename, filename_graph, n_comm, doc2lab
+    comm, metrics, graph_metrics, filename, filename_graph, n_comm, doc2lab, doc2attr
 ):
     """Write communities in csv file.
     Header is:
@@ -541,9 +536,10 @@ def write_communities(
         pairs_idx = list(itertools.combinations(range(n_comm), 2))
 
         header = (
-            "ID,DOI,community,definition,"
-            "community_density,graph_density,local_clustering,"
-            "degree,degree_in_community,centrality,centrality_in_community,weighted_centrality,weighted_centrality_in_community,"
+            "ID,DOI,community,definition,date,"
+            "local_clustering,"
+            "degree,degree_in_community,centrality,"
+            "centrality_in_community"
         )
         header = header[:-1]
         header += "\n"
@@ -556,14 +552,15 @@ def write_communities(
         for comm_id, community in enumerate(comm):
 
             for doc_id in community:
-                DOI, definition = doc2lab[doc_id]["DOI"], doc2lab[doc_id]["definition"]
+                definition = doc2lab[doc_id]["definition"]
+                DOI, date = doc2attr[doc_id]["DOI"], doc2attr[doc_id]["date"]
                 metrics_out = (
-                    f"{doc_id},{DOI},comm_{comm_id},{definition},"
+                    f"{doc_id},{DOI},comm_{comm_id},{definition},{date},"
                     f"{metrics[doc_id]['local_clustering']},"
                     f"{metrics[doc_id]['degree']},"
                     f"{metrics[doc_id]['degree_in_community']},"
                     f"{metrics[doc_id]['centrality']},"
-                    f"{metrics[doc_id]['centrality_in_community']},"
+                    f"{metrics[doc_id]['centrality_in_community']}"
                 )
                 metrics_out = metrics_out[:-1]
                 metrics_out += "\n"
@@ -597,7 +594,7 @@ def main():
     # don't generate graph if --load is used
     if config["graph"]["load"] is None or config["graph"]["load"] == "":
         graph_name = "commonCitationGraph.csv"
-        gx = create_bibliographic_coupling_graph(
+        gx, doc2attr = create_bibliographic_coupling_graph(
             doc_list,
             doc2lab,
             config["graph"]["dump"],
@@ -610,7 +607,7 @@ def main():
         if config["graph"]["write_graph"]:
             write_graph(gx, output, graph_name)
     else:
-        gx = load_graph(config["graph"]["load"])
+        gx, doc2attr = load_graph(config["graph"]["load"])
 
     # run community detection
     if (
@@ -636,6 +633,7 @@ def main():
         doc2lab,
         config["communities"]["ncommunities"],
         config["graph"]["weight"],
+        doc2attr,
     )
 
 
