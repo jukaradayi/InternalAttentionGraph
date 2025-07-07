@@ -41,54 +41,80 @@ def parse_config(config_path):
 
     ## check config values
     # check weight
-    if config['graph']['weight'] not in ["association", "cosine", "inclusion", "jaccard", "no_norm"]:
+    if config["graph"]["weight"] not in [
+        "association",
+        "cosine",
+        "inclusion",
+        "jaccard",
+        "no_norm",
+    ]:
         raise RuntimeError(
             "no weight defined. Please choose a normalisation using -w with one the "
             "choices available"
         )
-    
+
     # check mutual exclusivity for thresholds
-    if config['communities']['threshold_coverage'] is not None and config['communities']['threshold_cluster'] :
-        raise RuntimeError("theshold_coverage and threshold_cluster are mutually"
-        "exclusive, please only set on, and set the other to null")
-    
+    if (
+        config["communities"]["threshold_coverage"] is not None
+        and config["communities"]["threshold_cluster"]
+    ):
+        raise RuntimeError(
+            "theshold_coverage and threshold_cluster are mutually"
+            "exclusive, please only set on, and set the other to null"
+        )
+
     # check booleans
-    if not isinstance(config['graph']['ref2articles'] , bool):
-        raise RuntimeError(f"ref2articles argument should be True "
-                            "or False, not {config['graph']['ref2articles']}")
-    if not isinstance(config['graph']['write_graph'] , bool):
-        raise RuntimeError(f"write_graph argument should be True "
-                            "or False, not {config['graph']['write_graph']}")
-    if not isinstance(config['graph']['dump'] , bool):
-        raise RuntimeError(f"dump argument should be True "
-                            "or False, not {config['graph']['dump']}")
-    if not isinstance(config['communities']['use_def'] , bool):
-        raise RuntimeError(f"use_def argument should be True "
-                            "or False, not {config['communities']['use_def']}")
-    #if not isinstance(config['communities']['girvanNewman'] , bool):
+    if not isinstance(config["graph"]["ref2articles"], bool):
+        raise RuntimeError(
+            f"ref2articles argument should be True "
+            "or False, not {config['graph']['ref2articles']}"
+        )
+    if not isinstance(config["graph"]["write_graph"], bool):
+        raise RuntimeError(
+            f"write_graph argument should be True "
+            "or False, not {config['graph']['write_graph']}"
+        )
+    if not isinstance(config["graph"]["dump"], bool):
+        raise RuntimeError(
+            f"dump argument should be True " "or False, not {config['graph']['dump']}"
+        )
+    if not isinstance(config["communities"]["use_def"], bool):
+        raise RuntimeError(
+            f"use_def argument should be True "
+            "or False, not {config['communities']['use_def']}"
+        )
+    # if not isinstance(config['communities']['girvanNewman'] , bool):
     #    raise RuntimeError(f"girvanNewman argument should be True "
     #                        "or False, not {config['communities']['girvanNewman']}")
-    if not isinstance(config['communities']['contingency'] , bool):
-        raise RuntimeError(f"contingency argument should be True "
-                            "or False, not {config['communities']['contingency']}")
-    if not isinstance(config['verbose'] , bool):
-        raise RuntimeError(f"verbose argument should be True "
-                            "or False, not {config['verbose']}")
+    if not isinstance(config["communities"]["contingency"], bool):
+        raise RuntimeError(
+            f"contingency argument should be True "
+            "or False, not {config['communities']['contingency']}"
+        )
+    if not isinstance(config["verbose"], bool):
+        raise RuntimeError(
+            f"verbose argument should be True " "or False, not {config['verbose']}"
+        )
 
     # create output folder if it doesn't exist
-    if not os.path.isdir(config['input_output']['output']):
-        os.mkdir(config['input_output']['output'])
+    if not os.path.isdir(config["input_output"]["output"]):
+        os.mkdir(config["input_output"]["output"])
 
     # check resolution
-    if not (isinstance(config['communities']['greedy']['resolutionMax'], float) 
-            and isinstance(config['communities']['greedy']['resolutionMin'], float)) :
+    if not (
+        isinstance(config["communities"]["greedy"]["resolutionMax"], float)
+        and isinstance(config["communities"]["greedy"]["resolutionMin"], float)
+    ):
         raise RuntimeError(f"resolutionMin and Max should be floats")
 
-    if (config['communities']['greedy']['resolutionMax'] < config['communities']['greedy']['resolutionMin']) :
+    if (
+        config["communities"]["greedy"]["resolutionMax"]
+        < config["communities"]["greedy"]["resolutionMin"]
+    ):
         raise RuntimeError(f"resolutionMin should be less or equal to resolutionMax")
-   
+
     # copy config file in output folder
-    shutil.copy(config_path, config['input_output']['output'])
+    shutil.copy(config_path, config["input_output"]["output"])
 
     return config
 
@@ -123,17 +149,18 @@ def read_input_csv(
         keys are doc_id, values are (DOI, label1, label2, label3)
 
     """
+
     def parse_header(header, separator):
-        """ Parse header to find position of the following columns:
-            ID,  DOI, Final_Field1, Final_Field2, Final_Field3, Final_definition
+        """Parse header to find position of the following columns:
+        ID,  DOI, Final_Field1, Final_Field2, Final_Field3, Final_definition
         """
         col_names = header.strip().split(separator)
-        id_pos = col_names.index('ID')
-        doi_pos = col_names.index('DOI')
-        field1_pos = col_names.index('Final_Field1')
-        field2_pos = col_names.index('Final_Field2')
-        field3_pos = col_names.index('Final_Field3')
-        def_pos = col_names.index('Final_definition')
+        id_pos = col_names.index("ID")
+        doi_pos = col_names.index("DOI")
+        field1_pos = col_names.index("Final_Field1")
+        field2_pos = col_names.index("Final_Field2")
+        field3_pos = col_names.index("Final_Field3")
+        def_pos = col_names.index("Final_definition")
         return (id_pos, doi_pos, field1_pos, field2_pos, field3_pos, def_pos)
 
     annot = []  # store document info as tuple
@@ -147,19 +174,14 @@ def read_input_csv(
 
             # parse header and get position of each column
             if line_idx == 0:
-                (id_pos,
-                 doi_pos,
-                 field1_pos,
-                 field2_pos,
-                 field3_pos,
-                 def_pos) = parse_header(line, separator) 
+                (id_pos, doi_pos, field1_pos, field2_pos, field3_pos, def_pos) = (
+                    parse_header(line, separator)
+                )
 
                 continue  # skip header
 
             # parse line and get each value
-            col_values = line.strip().split(
-                separator
-            ) 
+            col_values = line.strip().split(separator)
             doc_id = col_values[id_pos]
             DOI = col_values[doi_pos]
             label1 = col_values[field1_pos]
@@ -171,7 +193,7 @@ def read_input_csv(
             if label2 == label1:
                 # remove duplicates - there should be only 3 cases
                 label2 = ""
-            labels = (label1, label2, label3, definition) 
+            labels = (label1, label2, label3, definition)
             # labels = [label1] # other option is to only keep the first label
             # third option is to concatenate labels
             # node_label = "_".join(sorted(list({lab for lab in labels if len(lab) > 0})))
@@ -327,7 +349,7 @@ def create_common_citation_graph(
     gx = nx.Graph()
     gx.add_nodes_from(doc2lab)
 
-    # store number of fails using crossRef for debugging purposes 
+    # store number of fails using crossRef for debugging purposes
     fails = []
     succ = []
 
@@ -341,6 +363,7 @@ def create_common_citation_graph(
     # when two graph have at least one ref in common.
     # Edge of link is number of ref in common
     doi2ref = {}
+    doc2date = {}
     for doc_id, DOI, _, _, _ in annot:
 
         try:
@@ -348,6 +371,20 @@ def create_common_citation_graph(
             work = cr.works(ids=DOI)
             references = work["message"]["reference"]
             doi2ref[doc_id] = {ref["DOI"] for ref in references if "DOI" in ref}
+            # try:
+            if "published-print" in work["message"]:
+                _date = work["message"]["published-print"]["date-parts"][0]
+            elif "published-online" in work["message"]:
+                _date = work["message"]["published-online"]["date-parts"][0]
+
+            if len(_date) == 2:
+                date = f"{_date[1]}/{_date[0]}"
+            else:
+                date = f"{_date[0]}"
+            doc2date[doc_id] = {"date": date, "doi": DOI}
+            # except:
+            #    ipdb.set_trace()
+
             for ref in references:
                 if "DOI" in ref:
                     ref2article[ref["DOI"]].append(doc_id)
@@ -358,7 +395,7 @@ def create_common_citation_graph(
             # either doi is not on crossref,
             # or there are no references in the dict.
             fails.append(DOI)
-
+    nx.set_node_attributes(gx, doc2date)
     # create graph
     for doi_u in doi2ref:
         for doi_v in doi2ref:
@@ -399,9 +436,9 @@ def create_common_citation_graph(
     with open(os.path.join(output, "common_ref_distrib.csv"), "w") as fout:
         fout.write("ID_u,ID_v,DOI_u,DOI_v,number_common_ref\n")
         for e in gx.edges():
+            ipdb.set_trace()
             DOI_u, _, _, _ = annot_dict[e[0]]
             DOI_v, _, _, _ = annot_dict[e[1]]
-
             # w = gx[e[0]][e[1]]["weight"]
             w = common_ref_distrib[(e[0], e[1])]
             fout.write(f"{e[0]},{e[1]},{DOI_u},{DOI_v},{w}\n")
@@ -542,7 +579,7 @@ def compute_community(
             cov = 1.0
         covered_nodes = [u for C in comm[:N_clus] for u in C]
 
-        # get majority label and map each article in the community to this label 
+        # get majority label and map each article in the community to this label
         comm_label, doc2uniqLab = majority_class_per_cluster(comm, doc2lab)
 
         ## compute homogeneity and completeness for "cognition" graph
@@ -736,6 +773,7 @@ def compute_metrics(gx, comm, res):
         _comm_density = nx.density(comm_gx)
         betweenness_comm = nx.betweenness_centrality(comm_gx, weight=None)
 
+        # TODO cleaner version : get subgraph from gx_dist
         comm_gx_dist = comm_gx.copy()
         for e in comm_gx_dist.edges():
             e_as = comm_gx_dist[e[0]][e[1]]["weight"]
@@ -848,10 +886,13 @@ def get_subgraph_communities_pair(gx, comm, metrics, n_comm, output):
     if n_comm == 0:
         return metrics
 
-    # get 3 biggest communities
+    # get n_comm biggest communities
     pairs_idx = list(itertools.combinations(range(n_comm), 2))
     boundaries = {}
     for i0, i1 in pairs_idx:
+        sub_gx = gx.subgraph(comm_pair)
+        write_graph(sub_gx, output, f"subgraph_comm{i0}_comm{i1}.csv")
+
         # get subgraph induced by pair of communities
         comm0, comm1 = comm[i0], comm[i1]
 
@@ -888,8 +929,6 @@ def get_subgraph_communities_pair(gx, comm, metrics, n_comm, output):
             metrics[node][f"dist_from_comm_{i1}_to_{i0}"] = np.mean(dists)
 
         comm_pair = comm0.union(comm1)
-        sub_gx = gx.subgraph(comm_pair)
-        write_graph(sub_gx, output, f"subgraph_comm{i0}_comm{i1}.csv")
 
         sub_gx_dist = sub_gx.copy()
         for e in sub_gx_dist.edges():
@@ -1106,7 +1145,7 @@ def main():
 
     # declare variables for input parameters called multiple times
     output = config["input_output"]["output"]
-    #if not os.path.isdir(output):
+    # if not os.path.isdir(output):
     #    os.mkdir(output)
 
     # read input dataset and create common citation graph
@@ -1118,7 +1157,7 @@ def main():
     # don't generate graph if --load is used
     if config["graph"]["load"] is None or config["graph"]["load"] == "":
 
-        if config['graph']['direct_citation']:
+        if config["graph"]["direct_citation"]:
             graph_name = "directCitationGraph.csv"
             gx = create_direct_citation_graph(
                 annot,
@@ -1148,31 +1187,34 @@ def main():
         gx = load_graph(config["graph"]["load"])
 
     # run community detection
-    if config['communities']['greedy']['resolutionMin'] == config['communities']['greedy']['resolutionMax']:
-        resolutions = [config['communities']['greedy']['resolutionMin']]
+    if (
+        config["communities"]["greedy"]["resolutionMin"]
+        == config["communities"]["greedy"]["resolutionMax"]
+    ):
+        resolutions = [config["communities"]["greedy"]["resolutionMin"]]
     else:
         resolutions = np.arange(
-            config['communities']['greedy']['resolutionMin'],
-            config['communities']['greedy']['resolutionMax'],
-            config['communities']['greedy']['resolutionStep'],
+            config["communities"]["greedy"]["resolutionMin"],
+            config["communities"]["greedy"]["resolutionMax"],
+            config["communities"]["greedy"]["resolutionStep"],
         )
 
-    if config['verbose']:
+    if config["verbose"]:
         print(f"Running community detection for resolutions: {resolutions}")
     compute_community(
         gx,
         resolutions,
-        config['communities']['contingency'],
-        config['verbose'],
+        config["communities"]["contingency"],
+        config["verbose"],
         output,
         doc2lab,
         annot_dict,
-        config['communities']['threshold_coverage'],
-        config['communities']['threshold_cluster'],
-        config['graph']['direct_citation'],
-        config['communities']['use_def'],
-        config['communities']['ncommunities'],
-        config['graph']['weight'],
+        config["communities"]["threshold_coverage"],
+        config["communities"]["threshold_cluster"],
+        config["graph"]["direct_citation"],
+        config["communities"]["use_def"],
+        config["communities"]["ncommunities"],
+        config["graph"]["weight"],
         True,
         None,
     )
