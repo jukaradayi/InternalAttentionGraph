@@ -38,14 +38,25 @@ def parse_config(config_path):
     """
     with open(config_path, "r") as fin:
         config = yaml.safe_load(fin)
-    if config['graph']['weight'] not in ["association", "cosine", "inclusion", "jaccard", "no_norm"]:
+    if config["graph"]["weight"] not in [
+        "association",
+        "cosine",
+        "inclusion",
+        "jaccard",
+        "no_norm",
+    ]:
         raise RuntimeError(
             "no weight defined. Please choose a normalisation using -w with one the "
             "choices available"
         )
-    if config['communities']['threshold_coverage'] is not None and config['communities']['threshold_cluster'] :
-        raise RuntimeError("theshold_coverage and threshold_cluster are mutually"
-        "exclusive, please only set on, and set the other to null")
+    if (
+        config["communities"]["threshold_coverage"] is not None
+        and config["communities"]["threshold_cluster"]
+    ):
+        raise RuntimeError(
+            "theshold_coverage and threshold_cluster are mutually"
+            "exclusive, please only set on, and set the other to null"
+        )
     return config
 
 
@@ -668,8 +679,7 @@ def compute_metrics(gx, comm, res):
         for e in comm_gx_dist.edges():
             e_as = comm_gx_dist[e[0]][e[1]]["weight"]
             comm_gx_dist[e[0]][e[1]]["weight"] = 1 - e_as
-        as_comm_betw = nx.betweenness_centrality(comm_gx, weight="weight")
-
+        as_comm_betw = nx.betweenness_centrality(comm_gx_dist, weight="weight")
         # comm_metrics[part_id] = {"density": _comm_density}
         for u in part:
             metrics[u] = {
@@ -1049,7 +1059,7 @@ def main():
     # don't generate graph if --load is used
     if config["graph"]["load"] is None or config["graph"]["load"] == "":
 
-        if config['graph']['direct_citation']:
+        if config["graph"]["direct_citation"]:
             graph_name = "directCitationGraph.csv"
             gx = create_direct_citation_graph(
                 annot,
@@ -1079,31 +1089,34 @@ def main():
         gx = load_graph(config["graph"]["load"])
 
     # run community detection
-    if config['communities']['greedy']['resolutionMin'] == config['communities']['greedy']['resolutionMax']:
-        resolutions = [config['communities']['greedy']['resolutionMin']]
+    if (
+        config["communities"]["greedy"]["resolutionMin"]
+        == config["communities"]["greedy"]["resolutionMax"]
+    ):
+        resolutions = [config["communities"]["greedy"]["resolutionMin"]]
     else:
         resolutions = np.arange(
-            config['communities']['greedy']['resolutionMin'],
-            config['communities']['greedy']['resolutionMax'],
-            config['communities']['greedy']['resolutionStep'],
+            config["communities"]["greedy"]["resolutionMin"],
+            config["communities"]["greedy"]["resolutionMax"],
+            config["communities"]["greedy"]["resolutionStep"],
         )
 
-    if config['verbose']:
+    if config["verbose"]:
         print(f"Running community detection for resolutions: {resolutions}")
     compute_community(
         gx,
         resolutions,
-        config['communities']['contingency'],
-        config['verbose'],
+        config["communities"]["contingency"],
+        config["verbose"],
         output,
         doc2lab,
         annot_dict,
-        config['communities']['threshold_coverage'],
-        config['communities']['threshold_cluster'],
-        config['graph']['direct_citation'],
-        config['communities']['use_def'],
-        config['communities']['ncommunities'],
-        config['graph']['weight'],
+        config["communities"]["threshold_coverage"],
+        config["communities"]["threshold_cluster"],
+        config["graph"]["direct_citation"],
+        config["communities"]["use_def"],
+        config["communities"]["ncommunities"],
+        config["graph"]["weight"],
         True,
         None,
     )
@@ -1113,7 +1126,7 @@ def main():
     #                         args.output, doc2lab, annot_dict)
 
 
-#def deprecated_main():
+# def deprecated_main():
 #    """Main function"""
 #    #  parse arguments
 #    parser = argparse.ArgumentParser(description="k edge swap")
