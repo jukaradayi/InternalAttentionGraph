@@ -2,12 +2,12 @@
 input_output:
   dataset: "InternalAttention_25092024_FieldsandDef.csv"
   separator: ',' # character used as a separator in the input csv file
-  output: "outputMegaRefactor" # name of the output folder
+  output: "output" # name of the output folder
 graph:
   ref2articles: True # set to True to write a mapping of the references to the articles referencing them
   write_graph: True # Enable to write the graph in a format readable by gephi
   dump: False # Write the graph in a format readable by gephi 
-  load: null #'output/common_citation.pickle' # load pickled graph object generated using --dump."
+  load: null #"output/bibliographic_coupling.pickle" # load pickled graph object generated using --dump."
   weight: "association" # choose the type of normalisation to use to compute the weights, choices are "association", "cosine", "inclusion", "jaccard", "no_norm"
 
 communities:

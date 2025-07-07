@@ -188,17 +188,17 @@ def read_input_csv(
     return doc2lab, doi2node, doc_list
 
 
-def dump_graph(gx, name):
+def dump_graph(gx, doc2attr, name):
     """dump graph as pickle"""
     with open(name, "wb") as fout:
-        pickle.dump(gx, fout)
+        pickle.dump((gx, doc2attr), fout)
 
 
 def load_graph(pickled_graph):
     """load pickled graph"""
     with open(pickled_graph, "rb") as fin:
-        gx = pickle.load(fin)
-    return gx
+        gx, doc2attr = pickle.load(fin)
+    return gx, doc2attr
 
 
 def create_bibliographic_coupling_graph(
@@ -340,7 +340,7 @@ def create_bibliographic_coupling_graph(
             fout.write(f"{e[0]},{e[1]},{DOI_u},{DOI_v},{w}\n")
 
     if dump:
-        dump_graph(gx, os.path.join(output, "common_citation.pickle"))
+        dump_graph(gx, doc2attr, os.path.join(output, "bibliographic_coupling.pickle"))
 
     return gx, doc2attr
 
