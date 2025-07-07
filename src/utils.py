@@ -38,9 +38,6 @@ def parse_config(config_path):
     """
     with open(config_path, "r") as fin:
         config = yaml.safe_load(fin)
-
-    ## check config values
-    # check weight
     if config["graph"]["weight"] not in [
         "association",
         "cosine",
@@ -52,8 +49,6 @@ def parse_config(config_path):
             "no weight defined. Please choose a normalisation using -w with one the "
             "choices available"
         )
-
-    # check mutual exclusivity for thresholds
     if (
         config["communities"]["threshold_coverage"] is not None
         and config["communities"]["threshold_cluster"]
@@ -778,8 +773,7 @@ def compute_metrics(gx, comm, res):
         for e in comm_gx_dist.edges():
             e_as = comm_gx_dist[e[0]][e[1]]["weight"]
             comm_gx_dist[e[0]][e[1]]["weight"] = 1 - e_as
-        as_comm_betw = nx.betweenness_centrality(comm_gx, weight="weight")
-
+        as_comm_betw = nx.betweenness_centrality(comm_gx_dist, weight="weight")
         # comm_metrics[part_id] = {"density": _comm_density}
         for u in part:
             metrics[u] = {
